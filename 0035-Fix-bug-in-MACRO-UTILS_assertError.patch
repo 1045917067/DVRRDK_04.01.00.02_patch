@@ -1,0 +1,36 @@
+From 40a797452179ab958ef5c5e56729268563b7862e Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Sat, 25 Jun 2016 14:03:11 +0800
+Subject: [PATCH 35/42] Fix bug in MACRO UTILS_assertError
+
+build with macro DVR_RDK_CFLAGS += -UUTILS_ASSERT_ENABLE m3vpss will hung.
+the reason is when open MACRO  UTILS_ASSERT_ENABLE,MACRO UTILS_assertError
+function will return a status,if not,do nothing.
+---
+ dvr_rdk/mcfw/src_bios6/utils/utils_trace.h | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/dvr_rdk/mcfw/src_bios6/utils/utils_trace.h b/dvr_rdk/mcfw/src_bios6/utils/utils_trace.h
+index 6d5f576..6ae2853 100755
+--- a/dvr_rdk/mcfw/src_bios6/utils/utils_trace.h
++++ b/dvr_rdk/mcfw/src_bios6/utils/utils_trace.h
+@@ -72,7 +72,15 @@ do {
+ 
+ #else
+ 
+-#define UTILS_assertError(condition, statusVar, errorCode, linkID, channelID)
++#define UTILS_assertError(condition, statusVar, errorCode, linkID, channelID)     \
++do {                                                                              \
++    if (!(condition)) {                                                           \
++        statusVar = errorCode;                                                    \
++        Vps_rprintf(" \n%d:ERR::linkID:%x::channelID:%d::"                                            \
++                     "errorCode:%d::FileName:%s::linuNum:%d::errorCondition:%s\n",                   \
++                     Utils_getCurTimeInMsec(),linkID, channelID, statusVar, __FILE__, __LINE__,#condition);  \
++    }                                                                                                \
++} while(0)
+ 
+ #endif                                                     /* ifndef
+                                                             * UTILS_ASSERT_ENABLE 
+-- 
+2.7.4
+
