@@ -1,0 +1,375 @@
+From 04ac87c7e743421b3ba9dc419e5d918291b08553 Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Fri, 10 Jun 2016 18:16:24 +0800
+Subject: [PATCH 24/42] Adjust window parameters dyanmically. Using this
+ feature, we can get original picture scaling ratio.
+
+---
+ .../interfaces/common_def/ti_vsys_common_def.h     |  15 +++
+ dvr_rdk/mcfw/interfaces/link_api/swMsLink.h        |  47 +++++++++
+ .../src_bios6/links_m3vpss/swMs/swMsLink_drv.c     | 108 ++++++++++++++++++++-
+ .../src_bios6/links_m3vpss/swMs/swMsLink_layouts.c |  27 +++++-
+ .../src_bios6/links_m3vpss/swMs/swMsLink_priv.h    |   2 +
+ .../src_bios6/links_m3vpss/swMs/swMsLink_tsk.c     |   6 ++
+ dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis.c          |  14 +++
+ .../src_linux/mcfw_api/usecases/multich_common.c   |   7 ++
+ 8 files changed, 217 insertions(+), 9 deletions(-)
+
+diff --git a/dvr_rdk/mcfw/interfaces/common_def/ti_vsys_common_def.h b/dvr_rdk/mcfw/interfaces/common_def/ti_vsys_common_def.h
+index 3f8b772..b8cd2ff 100755
+--- a/dvr_rdk/mcfw/interfaces/common_def/ti_vsys_common_def.h
++++ b/dvr_rdk/mcfw/interfaces/common_def/ti_vsys_common_def.h
+@@ -401,6 +401,21 @@ typedef struct WINDOW_S
+     UInt32 height;
+     /**< Height of frame in lines. */
+ 
++    UInt32 originRatio;
++    /**< TRUE/FALSE - Flag for original picture ratio */
++
++    UInt32 adjustX;
++    /**< relative adjusted window start-X offset */
++
++    UInt32 adjustY;
++    /**< relative adjusted window start-Y offset */
++
++    UInt32 adjustWidth;
++    /**< adjusted window width if originRatio is TRUE */
++
++    UInt32 adjustHeight;
++    /**< adjusted window height if originRatio is TRUE */
++
+ } WINDOW_S;
+ 
+ /**
+diff --git a/dvr_rdk/mcfw/interfaces/link_api/swMsLink.h b/dvr_rdk/mcfw/interfaces/link_api/swMsLink.h
+index d20e89f..ba01df2 100755
+--- a/dvr_rdk/mcfw/interfaces/link_api/swMsLink.h
++++ b/dvr_rdk/mcfw/interfaces/link_api/swMsLink.h
+@@ -184,6 +184,21 @@
+ */
+ #define SYSTEM_SW_MS_LINK_CMD_GET_TIME_INFO_OF_DISP_CH     (0x800B)
+ 
++/*
++ *  Modified by: zzx.
++ *
++ *  Date       : Apr 22, 2014.
++ *
++ *  Description:
++ *
++ *               Add cmd to adjust windows parameters dynamically.
++ */
++/**
++    \brief SWMS cmd to adjust windows parameters.
++    \param  SwMsLink_ChTimeParams * [IN] Windows params to adjust.
++*/
++#define SYSTEM_SW_MS_LINK_CMD_SET_WIN_PARAM             (0x800C)
++
+ /* @} */
+ 
+ /**
+@@ -230,6 +245,17 @@ typedef struct SwMsLink_LayoutWinInfo
+     /**< window height */
+     UInt32 bypass;
+     /**< TRUE/FALSE - Flag for Low Cost Scaling/DEI enable or disable */
++
++    UInt32 originRatio;
++    /**< TRUE/FALSE - Flag for original picture ratio */
++    UInt32 adjustX;
++    /**< relative adjusted window start-X offset */
++    UInt32 adjustY;
++    /**< relative adjusted window start-Y offset */
++    UInt32 adjustWidth;
++    /**< adjusted window width if originRatio is TRUE */
++    UInt32 adjustHeight;
++    /**< adjusted window height if originRatio is TRUE */
+ } SwMsLink_LayoutWinInfo;
+ 
+ /**
+@@ -252,6 +278,27 @@ typedef struct SwMsLink_WinInfo
+ } SwMsLink_WinInfo;
+ 
+ /**
++ *  \brief SWMS window adjusted params
++ *
++ *  Defines the structure for the adjusted parameters of the window.
++ */
++typedef struct SwMsLink_AdjustWinPrm
++{
++    UInt32  winId;
++    /**< window ID */
++    UInt32 originRatio;
++    /**< TRUE/FALSE - Flag for original picture ratio */
++    UInt32 adjustX;
++    /**< relative adjusted window start-X offset */
++    UInt32 adjustY;
++    /**< relative adjusted window start-Y offset */
++    UInt32 adjustWidth;
++    /**< adjusted window width if originRatio is TRUE */
++    UInt32 adjustHeight;
++    /**< adjusted window height if originRatio is TRUE */
++} SwMsLink_AdjustWinPrm;
++
++/**
+  *  \brief SWMS link layout params
+  *
+  *  Defines the structure to specify the details of a mosaic layout
+diff --git a/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_drv.c b/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_drv.c
+index fb9b2a3..3712483 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_drv.c
++++ b/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_drv.c
+@@ -1323,7 +1323,22 @@ Int32 SwMsLink_drvSwitchLayout(SwMsLink_Obj * pObj,
+           SwMsLink_drvSetBlankOutputFlag(pObj);
+     }
+ 
++
++    /*
++     *  Modified by: zzx.
++     *
++     *  Date       : Apr 22, 2014.
++     *
++     *  Description:
++     *
++     *               Actually, the address of dst and src may overlap, so we use
++     *               memmove instead.
++     */
++#if 0
+     memcpy(&pObj->layoutParams, layoutParams, sizeof(*layoutParams));
++#else
++    memmove(&pObj->layoutParams, layoutParams, sizeof(*layoutParams));
++#endif
+ 
+     SwMsLink_updateLayoutParams(
+         &pObj->layoutParams,
+@@ -1341,10 +1356,15 @@ Int32 SwMsLink_drvSwitchLayout(SwMsLink_Obj * pObj,
+ 
+         pWinObj = &pObj->winObj[winId];
+ 
+-        pWinObj->scRtOutFrmPrm.width = pObj->layoutParams.winInfo[winId].width;
+-        pWinObj->scRtOutFrmPrm.height = pObj->layoutParams.winInfo[winId].height;
+-        pWinObj->scRtOutFrmPrm.pitch[0] = pObj->outFrameFormat.pitch[0];
+-        pWinObj->scRtOutFrmPrm.pitch[1] = pObj->outFrameFormat.pitch[1];
++		if (pObj->layoutParams.winInfo[winId].originRatio) {
++			pWinObj->scRtOutFrmPrm.width = pObj->layoutParams.winInfo[winId].adjustWidth;
++			pWinObj->scRtOutFrmPrm.height = pObj->layoutParams.winInfo[winId].adjustHeight;
++		} else {
++			pWinObj->scRtOutFrmPrm.width = pObj->layoutParams.winInfo[winId].width;
++			pWinObj->scRtOutFrmPrm.height = pObj->layoutParams.winInfo[winId].height;
++		}
++		pWinObj->scRtOutFrmPrm.pitch[0] = pObj->outFrameFormat.pitch[0];
++		pWinObj->scRtOutFrmPrm.pitch[1] = pObj->outFrameFormat.pitch[1];
+         pWinObj->scRtOutFrmPrm.pitch[2] = pObj->outFrameFormat.pitch[2];
+         pWinObj->scRtOutFrmPrm.memType =
+             pObj->info.queInfo[0].chInfo[0].memType;
+@@ -4682,3 +4702,83 @@ Int32 SwMsLink_drvGetInputChTimeInfo(SwMsLink_Obj *pObj, SwMsLink_ChTimeParams *
+     return FVID2_SOK;
+ }
+ 
++Int32 SwMsLink_drvSetWinPrm(SwMsLink_Obj *pObj, SwMsLink_AdjustWinPrm *winParams)
++{
++    SwMsLink_drvLock(pObj);
++
++    UTILS_assert(winParams != NULL);
++
++    UInt32 winId;
++    SwMsLink_LayoutWinInfo *pWinInfo = NULL;
++    SwMsLink_OutWinObj *pWinObj;
++    UInt32 outPitch, outDataFormat;
++
++    winId = winParams->winId;
++    outPitch = pObj->outFrameFormat.pitch[0];
++    outDataFormat = pObj->outFrameFormat.dataFormat;
++
++    if (winId < pObj->layoutParams.numWin)
++    {
++        pWinObj  = &pObj->winObj[winId];
++        pWinInfo = &pObj->layoutParams.winInfo[winId];
++
++        pWinInfo->originRatio  = winParams->originRatio;
++        pWinInfo->adjustWidth  = winParams->adjustWidth;
++        pWinInfo->adjustHeight = winParams->adjustHeight;
++        pWinInfo->adjustX      = winParams->adjustX;
++        pWinInfo->adjustY      = winParams->adjustY;
++
++        /*
++         *  Adjust buffer address offset.
++         */
++
++        if (SYSTEM_DF_YUV422I_YUYV == outDataFormat)
++        {
++            /* Align window width and height  */
++            if (pWinInfo->originRatio) {
++                pWinInfo->adjustWidth = SystemUtils_align(pWinInfo->adjustWidth, (SYSTEM_BUFFER_ALIGNMENT/2));
++                pWinInfo->adjustHeight = SystemUtils_align(pWinInfo->adjustHeight, 2);
++                pWinInfo->bufAddrOffset[0] = (pWinInfo->startY + pWinInfo->adjustY) * outPitch + (pWinInfo->startX + pWinInfo->adjustX) * 2;
++            } else {
++                pWinInfo->bufAddrOffset[0] = pWinInfo->startY * outPitch + pWinInfo->startX * 2;
++            }
++
++            pWinInfo->bufAddrOffset[0] = SystemUtils_align(pWinInfo->bufAddrOffset[0],SYSTEM_BUFFER_ALIGNMENT);
++        }
++        else /* YUV420 Format */
++        {
++            /* Align window width and height  */
++            if (pWinInfo->originRatio) {
++                pWinInfo->adjustWidth = SystemUtils_align(pWinInfo->adjustWidth, (SYSTEM_BUFFER_ALIGNMENT/2));
++                pWinInfo->adjustHeight = SystemUtils_align(pWinInfo->adjustHeight, 2);
++                pWinInfo->bufAddrOffset[0] = (pWinInfo->startY + pWinInfo->adjustY) * outPitch + (pWinInfo->startX + pWinInfo->adjustX);
++            } else {
++                pWinInfo->bufAddrOffset[0] = pWinInfo->startY * outPitch + pWinInfo->startX;
++            }
++            pWinInfo->bufAddrOffset[0] = SystemUtils_align(pWinInfo->bufAddrOffset[0],SYSTEM_BUFFER_ALIGNMENT);
++
++            if (pWinInfo->originRatio) {
++                pWinInfo->bufAddrOffset[1] = ((pWinInfo->startY + pWinInfo->adjustY)/2  * outPitch) + (pWinInfo->startX + pWinInfo->adjustX);
++            } else {
++                pWinInfo->bufAddrOffset[1] = (pWinInfo->startY/2  * outPitch) + pWinInfo->startX;
++            }
++            pWinInfo->bufAddrOffset[1] = SystemUtils_align(pWinInfo->bufAddrOffset[1],SYSTEM_BUFFER_ALIGNMENT);
++        }
++
++        /* Set the scaler out frame resolution */
++        pWinObj->scRtOutFrmPrm.width = pObj->layoutParams.winInfo[winId].adjustWidth;
++        pWinObj->scRtOutFrmPrm.height = pObj->layoutParams.winInfo[winId].adjustHeight;
++
++#if 0
++        memcpy(&layoutParams, &pObj->layoutParams, sizeof(layoutParams));
++
++        SwMsLink_drvSwitchLayout(pObj, &layoutParams, TRUE, TRUE);
++#else
++        pWinObj->applyRtPrm = TRUE;
++#endif
++    }
++
++    SwMsLink_drvUnlock(pObj);
++
++    return FVID2_SOK;
++}
+diff --git a/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_layouts.c b/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_layouts.c
+index 256ee40..a194623 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_layouts.c
++++ b/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_layouts.c
+@@ -31,7 +31,14 @@ Int32 SwMsLink_updateLayoutParams(SwMsLink_LayoutPrm * layoutParams,  UInt32 out
+             winInfo->width = SystemUtils_align(winInfo->width, (SYSTEM_BUFFER_ALIGNMENT/2));
+             winInfo->height = SystemUtils_align(winInfo->height, 2);
+ 
+-            winInfo->bufAddrOffset[0] = winInfo->startY * outPitch + winInfo->startX * 2;
++            if (winInfo->originRatio) {
++                winInfo->adjustWidth = SystemUtils_align(winInfo->adjustWidth, (SYSTEM_BUFFER_ALIGNMENT/2));
++                winInfo->adjustHeight = SystemUtils_align(winInfo->adjustHeight, 2);
++                winInfo->bufAddrOffset[0] = (winInfo->startY + winInfo->adjustY) * outPitch + (winInfo->startX + winInfo->adjustX) * 2;
++			} else {
++				winInfo->bufAddrOffset[0] = winInfo->startY * outPitch + winInfo->startX * 2;
++			}
++
+             winInfo->bufAddrOffset[0] = SystemUtils_align(winInfo->bufAddrOffset[0],SYSTEM_BUFFER_ALIGNMENT);
+         }
+         else /* YUV420 Format */
+@@ -40,11 +47,21 @@ Int32 SwMsLink_updateLayoutParams(SwMsLink_LayoutPrm * layoutParams,  UInt32 out
+             winInfo->width = SystemUtils_align(winInfo->width, (SYSTEM_BUFFER_ALIGNMENT));
+             winInfo->height = SystemUtils_align(winInfo->height,2);
+ 
+-            winInfo->bufAddrOffset[0] = winInfo->startY * outPitch + winInfo->startX;
+-            winInfo->bufAddrOffset[0] = SystemUtils_align(winInfo->bufAddrOffset[0],SYSTEM_BUFFER_ALIGNMENT);
++            if (winInfo->originRatio) {
++                winInfo->adjustWidth = SystemUtils_align(winInfo->adjustWidth, (SYSTEM_BUFFER_ALIGNMENT/2));
++				winInfo->adjustHeight = SystemUtils_align(winInfo->adjustHeight, 2);
++				winInfo->bufAddrOffset[0] = (winInfo->startY + winInfo->adjustY) * outPitch + (winInfo->startX + winInfo->adjustX);
++			} else {
++				winInfo->bufAddrOffset[0] = winInfo->startY * outPitch + winInfo->startX;
++			}
++			winInfo->bufAddrOffset[0] = SystemUtils_align(winInfo->bufAddrOffset[0],SYSTEM_BUFFER_ALIGNMENT);
+ 
+-            winInfo->bufAddrOffset[1] = (winInfo->startY/2  * outPitch) + winInfo->startX;
+-            winInfo->bufAddrOffset[1] = SystemUtils_align(winInfo->bufAddrOffset[1],SYSTEM_BUFFER_ALIGNMENT);
++			if (winInfo->originRatio) {
++				winInfo->bufAddrOffset[1] = ((winInfo->startY + winInfo->adjustY)/2  * outPitch) + (winInfo->startX + winInfo->adjustX);
++			} else {
++				winInfo->bufAddrOffset[1] = (winInfo->startY/2  * outPitch) + winInfo->startX;
++			}
++			winInfo->bufAddrOffset[1] = SystemUtils_align(winInfo->bufAddrOffset[1],SYSTEM_BUFFER_ALIGNMENT);
+         }
+ 
+         if(winInfo->channelNum >= SYSTEM_SW_MS_MAX_CH_ID)
+diff --git a/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_priv.h b/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_priv.h
+index c3239c2..6ad384d 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_priv.h
++++ b/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_priv.h
+@@ -436,6 +436,8 @@ Int32 SwMsLink_drvSetChannelMapParams(SwMsLink_Obj * pObj,
+ 
+ Int32 SwMsLink_drvGetInputChTimeInfo(SwMsLink_Obj *pObj, SwMsLink_ChTimeParams *chParams);
+ 
++Int32 SwMsLink_drvSetWinPrm(SwMsLink_Obj *pObj, SwMsLink_AdjustWinPrm *winParams);
++
+ #endif
+ 
+ 
+diff --git a/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_tsk.c b/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_tsk.c
+index 2e81901..a84bbc5 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_tsk.c
++++ b/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_tsk.c
+@@ -156,6 +156,12 @@ Int32 SwMsLink_tskRun(SwMsLink_Obj * pObj, Utils_TskHndl * pTsk,
+                  Utils_tskAckOrFreeMsg(pRunMsg, status);
+                  break;
+ 
++            case SYSTEM_SW_MS_LINK_CMD_SET_WIN_PARAM:
++                 pPrm = Utils_msgGetPrm(pRunMsg);
++                 status = SwMsLink_drvSetWinPrm(pObj, pPrm);
++                 Utils_tskAckOrFreeMsg(pRunMsg, status);
++                 break;
++
+             default:
+                 Utils_tskAckOrFreeMsg(pRunMsg, status);
+                 break;
+diff --git a/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis.c b/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis.c
+index 30ebc67..471db21 100755
+--- a/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis.c
++++ b/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis.c
+@@ -891,6 +891,13 @@ Int32 Vdis_setMosaicParamsDefault(VDIS_DEV vdDevId, VDIS_MOSAIC_S *psVdMosaicPar
+         vdisLayoutPrm.winInfo[winId].height             = psVdMosaicParam->winList[winId].height;
+         vdisLayoutPrm.winInfo[winId].startX             = psVdMosaicParam->winList[winId].start_X;
+         vdisLayoutPrm.winInfo[winId].startY             = psVdMosaicParam->winList[winId].start_Y;
++
++        vdisLayoutPrm.winInfo[winId].originRatio        = psVdMosaicParam->winList[winId].originRatio;
++        vdisLayoutPrm.winInfo[winId].adjustX            = psVdMosaicParam->winList[winId].adjustX;
++        vdisLayoutPrm.winInfo[winId].adjustY            = psVdMosaicParam->winList[winId].adjustY;
++        vdisLayoutPrm.winInfo[winId].adjustWidth        = psVdMosaicParam->winList[winId].adjustWidth;
++        vdisLayoutPrm.winInfo[winId].adjustHeight       = psVdMosaicParam->winList[winId].adjustHeight;
++
+         vdisLayoutPrm.winInfo[winId].bypass             = psVdMosaicParam->useLowCostScaling[winId];
+         chId = psVdMosaicParam->chnMap[winId];
+ 
+@@ -1070,6 +1077,13 @@ Int32 Vdis_getMosaicParams(VDIS_DEV vdDevId, VDIS_MOSAIC_S *psVdMosaicParam)
+         psVdMosaicParam->winList[winId].height      = vdisLayoutPrm.winInfo[winId].height;
+         psVdMosaicParam->winList[winId].start_X     = vdisLayoutPrm.winInfo[winId].startX;
+         psVdMosaicParam->winList[winId].start_Y     = vdisLayoutPrm.winInfo[winId].startY;
++
++        psVdMosaicParam->winList[winId].originRatio = vdisLayoutPrm.winInfo[winId].originRatio;
++        psVdMosaicParam->winList[winId].adjustX     = vdisLayoutPrm.winInfo[winId].adjustX;
++        psVdMosaicParam->winList[winId].adjustY     = vdisLayoutPrm.winInfo[winId].adjustY;
++        psVdMosaicParam->winList[winId].adjustWidth = vdisLayoutPrm.winInfo[winId].adjustWidth;
++        psVdMosaicParam->winList[winId].adjustHeight = vdisLayoutPrm.winInfo[winId].adjustHeight;
++
+         psVdMosaicParam->useLowCostScaling[winId]   = vdisLayoutPrm.winInfo[winId].bypass;
+     }
+ 
+diff --git a/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/multich_common.c b/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/multich_common.c
+index 7791fa4..ccc2983 100755
+--- a/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/multich_common.c
++++ b/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/multich_common.c
+@@ -276,6 +276,13 @@ Void MultiCh_swMsGetDefaultLayoutPrm(UInt32 devId, SwMsLink_CreateParams *swMsCr
+         winInfo->height = windowInfo->height;
+         winInfo->startX = windowInfo->start_X;
+         winInfo->startY = windowInfo->start_Y;
++
++        winInfo->originRatio  = windowInfo->originRatio;
++        winInfo->adjustWidth  = windowInfo->adjustWidth;
++        winInfo->adjustHeight = windowInfo->adjustHeight;
++        winInfo->adjustX      = windowInfo->adjustX;
++        winInfo->adjustY      = windowInfo->adjustY;
++
+         winInfo->channelNum = mosaicParam->chnMap[winId];
+         winInfo->bypass = mosaicParam->useLowCostScaling[winId];
+       }
+-- 
+2.7.4
+
