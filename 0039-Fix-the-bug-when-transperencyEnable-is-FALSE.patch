@@ -1,0 +1,100 @@
+From 0f4ed76354d88de0ee096c3c5d0e6d561b5c8275 Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Fri, 22 Jul 2016 11:07:57 +0800
+Subject: [PATCH 39/42] Fix the bug: when transperencyEnable is FALSE
+
+when transperencyEnable is FALSE,
+OSD pixel is always blended with Video taking into account AlgLink_OsdWindowPrm.globalAlpha
+---
+ .../mcfw/src_bios6/alg/swosd/src/sw_osd_ti_alg.c   | 68 ++++++++++++++++++++++
+ 1 file changed, 68 insertions(+)
+
+diff --git a/dvr_rdk/mcfw/src_bios6/alg/swosd/src/sw_osd_ti_alg.c b/dvr_rdk/mcfw/src_bios6/alg/swosd/src/sw_osd_ti_alg.c
+index 271d034..c6371be 100755
+--- a/dvr_rdk/mcfw/src_bios6/alg/swosd/src/sw_osd_ti_alg.c
++++ b/dvr_rdk/mcfw/src_bios6/alg/swosd/src/sw_osd_ti_alg.c
+@@ -262,6 +262,34 @@ inline void SWOSD_TI_algBlendLineYuv2Yuv
+     }
+ 
+   }
++  else
++  {
++	  UInt32 i;
++
++	  pTmpAlp = (UInt8*)pAlp;
++
++
++	  for(i=0; i<width/4; i++)
++	  {
++		  *pTmpAlp = globalAlpha32;
++
++		  pTmpAlp++;
++
++		  *pTmpAlp = globalAlpha32;
++
++		  pTmpAlp++;
++
++		  *pTmpAlp = globalAlpha32;
++
++		  pTmpAlp++;
++
++		  *pTmpAlp = globalAlpha32;
++
++		  pTmpAlp++;
++	  }
++
++  }
++
+ 
+ 
+   inA8 = (UInt8*)&inA64Val;
+@@ -391,6 +419,46 @@ inline void SWOSD_TI_algBlendLineRgb2Yuv
+           }
+       }
+   }
++  else
++  {
++	  UInt32 i;
++
++	  pTmpAlp = (UInt8*)pAlp;
++
++	  /* For evry 2 pixels (2x3 Bytes R, G and B) we get 2 luma values
++		 and 1 value of U and V chroma components */
++
++	  if(frameFormat == SWOSD_FORMAT_YUV420sp)
++	  {
++		  for(i=0; i<(width/3); i++)
++		  {
++			  UInt32 scale;
++			  if(dataPlane)  /* Chroma Plane, Skip Alternate RGB Pixels */
++				  scale = 2;
++			  else
++				  scale = 1;
++
++			  *pTmpAlp = globalAlpha32;
++			  if(dataPlane)  /* Chroma Plane, Skip Alternate RGB Pixels */
++				  *(pTmpAlp + 1) = globalAlpha32;
++
++			  pTmpAlp += scale;
++		  }
++	  }
++	  else
++	  {
++		  for(i=0; i<width/6; i++)
++		  {
++			  *pTmpAlp       = globalAlpha32;
++			  *(pTmpAlp + 1) = globalAlpha32;
++			  *(pTmpAlp + 3) = globalAlpha32;
++
++			  *(pTmpAlp + 2) = globalAlpha32;
++
++			  pTmpAlp += 4;
++		  }
++	  }
++  }
+ 
+ 
+   inA8 = (UInt8*)&inA64Val;
+-- 
+2.7.4
+
