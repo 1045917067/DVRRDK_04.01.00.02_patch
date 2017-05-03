@@ -1,0 +1,446 @@
+From a21860a7fc85955252ca78e9d21a20962e222fb9 Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Wed, 8 Jun 2016 17:24:07 +0800
+Subject: [PATCH 05/42] Add link_api support.
+
+---
+ dvr_rdk/mcfw/interfaces/link_api/captureLink.h     |  6 +--
+ dvr_rdk/mcfw/interfaces/link_api/encLink.h         | 41 ++++++++++++++++--
+ .../links_common/ipcBitsIn/ipcBitsInLink_tsk.c     |  2 +-
+ .../links_m3video/iva_enc/encLink_algIf.h          | 16 +++++++
+ .../links_m3video/iva_enc/encLink_common.c         | 17 ++++++++
+ .../src_bios6/links_m3video/iva_enc/encLink_h264.c | 17 +++++++-
+ .../src_bios6/links_m3video/iva_enc/encLink_jpeg.c |  2 +
+ .../links_m3vpss/capture/captureLink_drv.c         | 49 +++++++---------------
+ .../links_m3vpss/capture/captureLink_priv.h        |  2 +-
+ .../links_m3vpss/display/displayLink_drv.c         | 31 ++++++--------
+ .../src_bios6/links_m3vpss/swMs/swMsLink_drv.c     |  4 +-
+ .../src_bios6/links_m3vpss/swMs/swMsLink_priv.h    |  2 +-
+ 12 files changed, 124 insertions(+), 65 deletions(-)
+
+diff --git a/dvr_rdk/mcfw/interfaces/link_api/captureLink.h b/dvr_rdk/mcfw/interfaces/link_api/captureLink.h
+index d696c2f..d599eeb 100755
+--- a/dvr_rdk/mcfw/interfaces/link_api/captureLink.h
++++ b/dvr_rdk/mcfw/interfaces/link_api/captureLink.h
+@@ -658,9 +658,9 @@ static inline void CaptureLink_CreateParams_Init(CaptureLink_CreateParams *pPrm)
+     {
+         pPrm->vipInst[i].numChPerOutput                         = 0;
+         pPrm->vipInst[i].enableTimestampInInterrupt             = TRUE;
+-        pPrm->vipInst[i].videoCaptureMode                       = SYSTEM_CAPT_VIDEO_CAPTURE_MODE_MULTI_CH_PIXEL_MUX_EMBEDDED_SYNC;
+-        pPrm->vipInst[i].videoIfMode                            = SYSTEM_CAPT_VIDEO_IF_MODE_8BIT;
+-        pPrm->vipInst[i].inScanFormat                           = SYSTEM_SF_INTERLACED;
++        pPrm->vipInst[i].videoCaptureMode                       = SYSTEM_CAPT_VIDEO_CAPTURE_MODE_SINGLE_CH_NON_MUX_EMBEDDED_SYNC;
++        pPrm->vipInst[i].videoIfMode                            = SYSTEM_CAPT_VIDEO_IF_MODE_16BIT;
++        pPrm->vipInst[i].inScanFormat                           = SYSTEM_SF_PROGRESSIVE;
+         pPrm->vipInst[i].muxModeStartChId                       = 0;
+         pPrm->vipInst[i].useAdvancedParams                      = FALSE;
+         pPrm->vipInst[i].advancedParams.clipActive              = FALSE;
+diff --git a/dvr_rdk/mcfw/interfaces/link_api/encLink.h b/dvr_rdk/mcfw/interfaces/link_api/encLink.h
+index f767e9b..ab5965f 100755
+--- a/dvr_rdk/mcfw/interfaces/link_api/encLink.h
++++ b/dvr_rdk/mcfw/interfaces/link_api/encLink.h
+@@ -33,6 +33,8 @@ extern "C" {
+ /* Include's  */
+ #include <mcfw/interfaces/link_api/system.h>
+ #include <mcfw/interfaces/common_def/ti_venc_common_def.h>
++#include <ti/xdais/dm/ividenc2.h>
++#include <ih264enc.h>
+ 
+ /* Defines */
+ 
+@@ -444,6 +446,20 @@ typedef struct EncLink_ChInputFpsParam
+     /**< input Modified encoder Frames per second (FPS) value */
+ } EncLink_ChInputFpsParam;
+ 
++typedef struct EncLink_ChIntraCodingParams {
++    Int32 intraCodingPreset;
++    Int32 intraRefreshMethod;
++    Int32 intraRefreshRate;
++    Int32 lumaIntra8x8Enable;
++} EncLink_ChIntraCodingParams;
++
++typedef struct EncLink_ChSliceCodingParams {
++    Int32 sliceCodingPreset;
++    Int32 sliceMode;
++    Int32 sliceUnitSize;
++    Int32 streamFormat;
++} EncLink_ChSliceCodingParams;
++
+ 
+ /**
+     \brief Enc link channel dynamic params
+@@ -468,6 +484,9 @@ typedef struct EncLink_ChDynamicParams
+     Int32 inputFrameRate;
+     /**< to configure the encode link frame rate control  */
+ 
++    Int32 targetFrameRate;
++    /**< to configure the encode link frame rate control  */
++
+     Int32 rcAlg;
+     /**< Rate-control Algorithm type */
+ 
+@@ -485,6 +504,10 @@ typedef struct EncLink_ChDynamicParams
+ 
+     Int32 vbrSensitivity;
+     /**< to configure the encode link cvbe sensitivity  */
++
++    EncLink_ChIntraCodingParams intraCodingParams;
++    EncLink_ChSliceCodingParams sliceCodingParams;
++
+ } EncLink_ChDynamicParams;
+ 
+ 
+@@ -627,11 +650,23 @@ static inline void EncLink_CreateParams_Init(EncLink_CreateParams *pPrm)
+ 
+     for (i=0; i<ENC_LINK_MAX_CH;i++)
+     {
++        EncLink_ChDynamicParams *dynamicParams = &pPrm->chCreateParams[i].defaultDynamicParams;
++        
+         pPrm->chCreateParams[i].dataLayout = VCODEC_FIELD_SEPARATED;
+-        pPrm->chCreateParams[i].fieldMergeEncodeEnable = FALSE;
+-        pPrm->chCreateParams[i].overrideInputScanFormat = FALSE;
++        pPrm->chCreateParams[i].fieldMergeEncodeEnable = FALSE;
++        pPrm->chCreateParams[i].overrideInputScanFormat = FALSE;
+         pPrm->chCreateParams[i].fieldPicEncode = FALSE;
+-    }
++
++        dynamicParams->intraCodingParams.intraCodingPreset  = IH264_INTRACODING_DEFAULT;
++        dynamicParams->intraCodingParams.intraRefreshMethod = IH264_INTRAREFRESH_DEFAULT;
++        dynamicParams->intraCodingParams.intraRefreshRate   = 0;
++        dynamicParams->intraCodingParams.lumaIntra8x8Enable = FALSE;
++
++        dynamicParams->sliceCodingParams.sliceCodingPreset  = IH264_SLICECODING_USERDEFINED;
++        dynamicParams->sliceCodingParams.sliceMode          = IH264_SLICEMODE_NONE;
++        dynamicParams->sliceCodingParams.sliceUnitSize      = 0;
++        dynamicParams->sliceCodingParams.streamFormat       = IH264_STREAM_FORMAT_DEFAULT;
++    }
+ }
+ #ifdef __cplusplus
+ }
+diff --git a/dvr_rdk/mcfw/src_bios6/links_common/ipcBitsIn/ipcBitsInLink_tsk.c b/dvr_rdk/mcfw/src_bios6/links_common/ipcBitsIn/ipcBitsInLink_tsk.c
+index f085814..a971030 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_common/ipcBitsIn/ipcBitsInLink_tsk.c
++++ b/dvr_rdk/mcfw/src_bios6/links_common/ipcBitsIn/ipcBitsInLink_tsk.c
+@@ -357,7 +357,7 @@ Int32 IpcBitsInLink_putEmptyBitBufs(Utils_TskHndl * pTsk, UInt16 queId,
+ 
+ #ifdef SYSTEM_DEBUG_IPC_RT
+     Vps_printf(" %d: IPC_BITS_IN   : Releasing %d bitbufs !!!\n",
+-               Utils_getCurTimeInMsec(), pBitBufList->numBitBufs);
++               Utils_getCurTimeInMsec(), pBitBufList->numBufs);
+ #endif
+ 
+     if (pBitBufList->numBufs)
+diff --git a/dvr_rdk/mcfw/src_bios6/links_m3video/iva_enc/encLink_algIf.h b/dvr_rdk/mcfw/src_bios6/links_m3video/iva_enc/encLink_algIf.h
+index 2e54bce..575c5dc 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_m3video/iva_enc/encLink_algIf.h
++++ b/dvr_rdk/mcfw/src_bios6/links_m3video/iva_enc/encLink_algIf.h
+@@ -54,6 +54,19 @@ typedef struct EncLink_AlgROIDynamicParams
+     Int32 roiPriority[ENC_LINK_CURRENT_MAX_ROI];
+ } EncLink_AlgROIDynamicParams;
+ 
++typedef struct EncLink_AlgIntraCodingParams {
++    Int32 intraCodingPreset;
++    Int32 intraRefreshMethod;
++    Int32 intraRefreshRate;
++    Int32 lumaIntra8x8Enable;
++} EncLink_AlgIntraCodingParams;
++
++typedef struct EncLink_AlgSliceCodingParams {
++    Int32 sliceCodingPreset;
++    Int32 sliceMode;
++    Int32 sliceUnitSize;
++    Int32 streamFormat;
++} EncLink_AlgSliceCodingParams;
+ 
+ typedef struct EncLink_AlgDynamicParams {
+     Int32 startX;
+@@ -81,9 +94,12 @@ typedef struct EncLink_AlgDynamicParams {
+     Bool  forceFrameStatus;
+     Int32 mvAccuracy;
+     Int32 refFrameRate;
++    Int32 qualityFactor;
+     UInt32 encryptedKey;
+ 
+     EncLink_AlgROIDynamicParams roiParams;
++    EncLink_AlgIntraCodingParams intraCodingParams;
++    EncLink_AlgSliceCodingParams sliceCodingParams;
+ } EncLink_AlgDynamicParams;
+ 
+ #endif                                                     /* _ENC_LINK_ALG_IF_H_
+diff --git a/dvr_rdk/mcfw/src_bios6/links_m3video/iva_enc/encLink_common.c b/dvr_rdk/mcfw/src_bios6/links_m3video/iva_enc/encLink_common.c
+index de33d2c..6feab39 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_m3video/iva_enc/encLink_common.c
++++ b/dvr_rdk/mcfw/src_bios6/links_m3video/iva_enc/encLink_common.c
+@@ -903,6 +903,12 @@ static Int32 enclink_codec_set_ch_alg_default_dynamic_params(EncLink_Obj * pObj,
+     pChAlgDynPrm->targetBitRate         = pChDynPrm->targetBitRate;
+     pChAlgDynPrm->rcAlg                 = pChDynPrm->rcAlg;
+ 
++    if(pChDynPrm->inputFrameRate > 0 && pChDynPrm->targetFrameRate > 0)
++    {
++        pChAlgDynPrm->targetFrameRate   = pChDynPrm->targetFrameRate * 1000;
++        pChAlgDynPrm->refFrameRate      = pChDynPrm->inputFrameRate * 1000;
++    }
++    else
+     if(pChAlgCreatePrm->format == IVIDEO_MJPEG)
+     {
+         pChAlgDynPrm->targetFrameRate = ENC_LINK_MJPEG_DEFAULT_ALGPARAMS_TARGETFRAMERATEX1000;
+@@ -953,6 +959,17 @@ static Int32 enclink_codec_set_ch_alg_default_dynamic_params(EncLink_Obj * pObj,
+     pChAlgDynPrm->vbrSensitivity        = pChDynPrm->vbrSensitivity;
+     pChAlgDynPrm->forceFrameStatus      = FALSE;
+     pChAlgDynPrm->mvAccuracy            = pChDynPrm->mvAccuracy;
++    pChAlgDynPrm->qualityFactor         = pChCreatePrm->profile;
++    
++    pChAlgDynPrm->intraCodingParams.intraCodingPreset       = pChDynPrm->intraCodingParams.intraCodingPreset;
++    pChAlgDynPrm->intraCodingParams.intraRefreshMethod      = pChDynPrm->intraCodingParams.intraRefreshMethod;
++    pChAlgDynPrm->intraCodingParams.intraRefreshRate        = pChDynPrm->intraCodingParams.intraRefreshRate;
++    pChAlgDynPrm->intraCodingParams.lumaIntra8x8Enable      = pChDynPrm->intraCodingParams.lumaIntra8x8Enable;
++    
++    pChAlgDynPrm->sliceCodingParams.sliceCodingPreset       = pChDynPrm->sliceCodingParams.sliceCodingPreset;
++    pChAlgDynPrm->sliceCodingParams.sliceMode               = pChDynPrm->sliceCodingParams.sliceMode;
++    pChAlgDynPrm->sliceCodingParams.sliceUnitSize           = pChDynPrm->sliceCodingParams.sliceUnitSize;
++    pChAlgDynPrm->sliceCodingParams.streamFormat            = pChDynPrm->sliceCodingParams.streamFormat;
+ 
+     return ENC_LINK_S_SUCCESS;
+ }
+diff --git a/dvr_rdk/mcfw/src_bios6/links_m3video/iva_enc/encLink_h264.c b/dvr_rdk/mcfw/src_bios6/links_m3video/iva_enc/encLink_h264.c
+index f13c229..3eab511 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_m3video/iva_enc/encLink_h264.c
++++ b/dvr_rdk/mcfw/src_bios6/links_m3video/iva_enc/encLink_h264.c
+@@ -1027,6 +1027,7 @@ static Int enclink_h264_set_static_params(IH264ENC_Params * staticParams,
+         (IH264_HIGH_PROFILE == algCreateParams->profile) 
+         ? IH264_SCALINGMATRIX_NORMAL: IH264_SCALINGMATRIX_NONE;
+     staticParams->rateControlParams.rcAlgo = algCreateParams->rateControlPreset;
++    staticParams->rateControlParams.enablePartialFrameSkip = TRUE;
+     staticParams->videnc2Params.maxBitRate = algCreateParams->maxBitRate;
+ 
+     staticParams->videnc2Params.inputDataMode = IVIDEO_ENTIREFRAME;
+@@ -1436,9 +1437,23 @@ static Int enclink_h264_set_dynamic_params(
+     dynamicParams->rateControlParams.frameSkipThMulQ5 = 0;
+     dynamicParams->rateControlParams.vbvUseLevelThQ5 = 0;
+ 
+-    dynamicParams->rateControlParams.maxPicSizeRatioI = 640;
++    dynamicParams->rateControlParams.maxPicSizeRatioI = 960;
+     dynamicParams->rateControlParams.skipDistributionWindowLength = 5;
+     dynamicParams->rateControlParams.numSkipInDistributionWindow = 2;
++    dynamicParams->rateControlParams.enablePartialFrameSkip = TRUE;
++    dynamicParams->rateControlParams.allowFrameSkip = TRUE;
++
++    /*Intra Coding Parameters*/
++    dynamicParams->intraCodingParams.intraCodingPreset = algDynamicParams->intraCodingParams.intraCodingPreset;
++    dynamicParams->intraCodingParams.intraRefreshMethod = algDynamicParams->intraCodingParams.intraRefreshMethod;
++    dynamicParams->intraCodingParams.intraRefreshRate = algDynamicParams->intraCodingParams.intraRefreshRate;
++    dynamicParams->intraCodingParams.lumaIntra8x8Enable = algDynamicParams->intraCodingParams.lumaIntra8x8Enable;
++
++    /*Slice Coding Parameters*/
++    dynamicParams->sliceCodingParams.sliceCodingPreset = algDynamicParams->sliceCodingParams.sliceCodingPreset;
++    dynamicParams->sliceCodingParams.sliceMode = algDynamicParams->sliceCodingParams.sliceMode;
++    dynamicParams->sliceCodingParams.sliceUnitSize = algDynamicParams->sliceCodingParams.sliceUnitSize;
++    dynamicParams->sliceCodingParams.streamFormat = algDynamicParams->sliceCodingParams.streamFormat;
+ 
+     return 0;
+ }
+diff --git a/dvr_rdk/mcfw/src_bios6/links_m3video/iva_enc/encLink_jpeg.c b/dvr_rdk/mcfw/src_bios6/links_m3video/iva_enc/encLink_jpeg.c
+index 3ba1217..6125c5d 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_m3video/iva_enc/encLink_jpeg.c
++++ b/dvr_rdk/mcfw/src_bios6/links_m3video/iva_enc/encLink_jpeg.c
+@@ -456,6 +456,8 @@ static Int enclink_jpeg_set_dynamic_params(IJPEGVENC_DynamicParams *
+     dynamicParams->videnc2DynamicParams.refFrameRate =
+         algDynamicParams->refFrameRate;
+     dynamicParams->videnc2DynamicParams.ignoreOutbufSizeFlag = XDAS_FALSE;
++    dynamicParams->qualityFactor =
++        algDynamicParams->qualityFactor;
+ 
+     return 0;
+ }
+diff --git a/dvr_rdk/mcfw/src_bios6/links_m3vpss/capture/captureLink_drv.c b/dvr_rdk/mcfw/src_bios6/links_m3vpss/capture/captureLink_drv.c
+index 41ae5ee..3b6647d 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_m3vpss/capture/captureLink_drv.c
++++ b/dvr_rdk/mcfw/src_bios6/links_m3vpss/capture/captureLink_drv.c
+@@ -428,34 +428,6 @@ Int32 CaptureLink_drvCreateInst(CaptureLink_Obj * pObj, UInt16 instId)
+ 
+     switch (pInstPrm->standard)
+     {
+-        case FVID2_STD_1080P_60:
+-        case FVID2_STD_1080P_30:
+-            pInst->maxWidth = 1920;
+-            pInst->maxHeight = 1080;
+-            inWidth  = pInst->maxWidth;
+-            inHeight = pInst->maxHeight;
+-            break;
+-
+-        case FVID2_STD_1080I_60:
+-            if (pVipCreateArgs->inDataFormat == FVID2_DF_RGB24_888)
+-            {
+-                pVipCreateArgs->inScanFormat = FVID2_SF_PROGRESSIVE;
+-                    /* since in 24-bit discrete sync mode FID signal
+-                        is not connected in board */
+-            }
+-            pInst->maxWidth = 1920;
+-            pInst->maxHeight = 540;
+-            inWidth  = pInst->maxWidth;
+-            inHeight = pInst->maxHeight;
+-            break;
+-
+-        case FVID2_STD_720P_60:
+-            pInst->maxWidth = 1280;
+-            pInst->maxHeight = 720;
+-            inWidth  = pInst->maxWidth;
+-            inHeight = pInst->maxHeight;
+-            break;
+-
+         case FVID2_STD_D1:
+ 
+             if(pObj->createArgs.enableSdCrop)
+@@ -554,11 +526,20 @@ Int32 CaptureLink_drvCreateInst(CaptureLink_Obj * pObj, UInt16 instId)
+             break;
+ 
+         default:
+-            pInst->maxWidth = 1920;
+-            pInst->maxHeight = 1080;
+-
+-            inWidth  = pInst->maxWidth;
+-            inHeight = pInst->maxHeight;
++			Vsys_getStdSize(pInstPrm->standard, &pInst->maxWidth, &pInst->maxHeight);
++			if (pVipCreateArgs->inScanFormat == FVID2_SF_INTERLACED) {
++				pInst->maxHeight = pInst->maxHeight / 2;
++
++				if (pVipCreateArgs->inDataFormat == FVID2_DF_RGB24_888)
++				{
++					pVipCreateArgs->inScanFormat = FVID2_SF_PROGRESSIVE;
++					/* since in 24-bit discrete sync mode FID signal
++					   is not connected in board */
++				}
++			}
++
++			inWidth  = pInst->maxWidth;
++			inHeight = pInst->maxHeight;
+             break;
+     }
+ 
+@@ -733,7 +714,7 @@ Int32 CaptureLink_drvCreateInst(CaptureLink_Obj * pObj, UInt16 instId)
+             pQueChInfo->pitch[1] = pVipOutPrm->pitch[1];
+             pQueChInfo->pitch[2] = pVipOutPrm->pitch[2];
+ 
+-            if(pObj->createArgs.fakeHdMode && pInstPrm->standard == FVID2_STD_D1)
++            if(pObj->createArgs.fakeHdMode)
+             {
+                 pQueChInfo->scanFormat = FVID2_SF_PROGRESSIVE;
+             }
+diff --git a/dvr_rdk/mcfw/src_bios6/links_m3vpss/capture/captureLink_priv.h b/dvr_rdk/mcfw/src_bios6/links_m3vpss/capture/captureLink_priv.h
+index dfc247c..4f1d14f 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_m3vpss/capture/captureLink_priv.h
++++ b/dvr_rdk/mcfw/src_bios6/links_m3vpss/capture/captureLink_priv.h
+@@ -108,7 +108,7 @@
+ #ifdef TI_8107_BUILD
+ #define CAPTURE_LINK_TMP_BUF_SIZE        (0)
+ #else
+-#define CAPTURE_LINK_TMP_BUF_SIZE        (1920*1080*2)
++#define CAPTURE_LINK_TMP_BUF_SIZE        (1920*1200*2)
+ #endif
+ 
+ #define CAPTURE_LINK_HEIGHT_MIN_LINES    (288)
+diff --git a/dvr_rdk/mcfw/src_bios6/links_m3vpss/display/displayLink_drv.c b/dvr_rdk/mcfw/src_bios6/links_m3vpss/display/displayLink_drv.c
+index dc36103..d6033eb 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_m3vpss/display/displayLink_drv.c
++++ b/dvr_rdk/mcfw/src_bios6/links_m3vpss/display/displayLink_drv.c
+@@ -59,9 +59,7 @@ Bool  DisplayLink_drvIsSDDef(DisplayLink_Obj * pObj)
+ {
+     Bool isSdDef = FALSE;
+ 
+-    if ((VSYS_STD_NTSC == pObj->createArgs.displayRes)
+-        ||
+-        (VSYS_STD_PAL == pObj->createArgs.displayRes))
++    if (Vsys_isStdInterlaced(pObj->createArgs.displayRes))
+     {
+         isSdDef = TRUE;
+     }
+@@ -1070,11 +1068,7 @@ Int32 DisplayLink_drvDisplayCreate(DisplayLink_Obj * pObj)
+ 
+     pFormat->fieldMerged[0] = FALSE;
+ 
+-    if (pObj->createArgs.displayRes == VSYS_STD_1080I_60
+-        ||
+-        pObj->createArgs.displayRes == VSYS_STD_NTSC
+-        ||
+-        pObj->createArgs.displayRes == VSYS_STD_PAL)
++    if (DisplayLink_drvIsSDDef(pObj))    
+     {
+         Int i;
+ 
+@@ -1104,16 +1098,11 @@ Int32 DisplayLink_drvDisplayCreate(DisplayLink_Obj * pObj)
+             }
+         }
+     }
+-    if (pObj->createArgs.displayRes == VSYS_STD_NTSC)
+-    {
+-        pFormat->width = 720;
+-        pFormat->height = 480;
+-    }
+-    if (pObj->createArgs.displayRes == VSYS_STD_PAL)
+-    {
+-        pFormat->width = 720;
+-        pFormat->height = 576;
+-    }
++
++    Vsys_getStdSize(pObj->createArgs.displayRes, &pFormat->width, &pFormat->height);
++    
++    if (pObj->createArgs.forceFieldSeparatedInputMode == TRUE)
++        pFormat->fieldMerged[0] = FALSE;
+ 
+     pFormat->fieldMerged[1] = pFormat->fieldMerged[0];
+     pFormat->fieldMerged[2] = pFormat->fieldMerged[0];
+@@ -1158,10 +1147,12 @@ Bool DisplayLink_drvIsFieldSeparatedInput(DisplayLink_Obj * pObj,
+     Bool isFieldSeparatedInput = FALSE;
+     UInt32 fieldMergedHeightNTSC;
+     UInt32 fieldMergedHeightPAL;
++    UInt32 fieldMergedHeight1080I;
+ 
+     UTILS_assert(DisplayLink_drvIsSDDef(pObj) == TRUE);
+     fieldMergedHeightNTSC = 240;
+     fieldMergedHeightPAL  = 288;
++    fieldMergedHeight1080I  = 1080;
+ 
+     pObj->enableFieldSeparatedInputMode = FALSE;
+ 
+@@ -1172,7 +1163,9 @@ Bool DisplayLink_drvIsFieldSeparatedInput(DisplayLink_Obj * pObj,
+         {
+             if ((queInfo->chInfo[0].height ==  fieldMergedHeightNTSC)
+                 ||
+-                (queInfo->chInfo[0].height ==  fieldMergedHeightPAL))
++                (queInfo->chInfo[0].height ==  fieldMergedHeightPAL)
++                ||
++                (queInfo->chInfo[0].height ==  fieldMergedHeight1080I))
+             {
+                 isFieldSeparatedInput = TRUE;
+             }
+diff --git a/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_drv.c b/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_drv.c
+index 6be7f59..fb9b2a3 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_drv.c
++++ b/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_drv.c
+@@ -4087,8 +4087,8 @@ Int32 SwMsLink_drvGetTimerPeriod(SwMsLink_Obj * pObj,
+     else
+     {
+         pObj->timerPeriod =
+-              (1000/(layoutParams->outputFPS+(layoutParams->outputFPS/10)));
+-              //(1000/(layoutParams->outputFPS));
++              //(1000/(layoutParams->outputFPS+(layoutParams->outputFPS/10)));
++              (1000/(layoutParams->outputFPS));
+     }
+     return FVID2_SOK;
+ }
+diff --git a/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_priv.h b/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_priv.h
+index 14a008a..c3239c2 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_priv.h
++++ b/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_priv.h
+@@ -35,7 +35,7 @@
+ 
+ #define SW_MS_MAX_WIDTH_SUPPORTED       (1920)
+ 
+-#define SW_MS_MAX_HEIGHT_SUPPORTED      (1080)
++#define SW_MS_MAX_HEIGHT_SUPPORTED      (1200)
+ 
+ #define SW_MS_SCALING_INTERVAL_INVALID  (~0u)
+ 
+-- 
+2.7.4
+
