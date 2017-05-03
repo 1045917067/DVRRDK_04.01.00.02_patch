@@ -1,0 +1,46 @@
+From 901ccbaf0c4df2ce0916de321b481cf033a3bf6c Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Wed, 8 Jun 2016 16:33:13 +0800
+Subject: [PATCH 02/42] Delete SYSTEM_PLATFORM_BOARD.
+
+---
+ dvr_rdk/mcfw/src_linux/mcfw_api/usecases/multich_common.c | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/multich_common.c b/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/multich_common.c
+index 94e4db3..ccc2983 100755
+--- a/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/multich_common.c
++++ b/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/multich_common.c
+@@ -1,6 +1,6 @@
+ #include "multich_common.h"
+ 
+-
++#if 0
+ #if defined (TI816X_DVR) || defined (TI8107_DVR)
+ #    define     SYSTEM_PLATFORM_BOARD                 SYSTEM_PLATFORM_BOARD_DVR
+ #else
+@@ -22,6 +22,7 @@
+ #        endif
+ #    endif
+ #endif
++#endif
+ 
+ UInt32 gMultiCh_enabledProcs[] = {
+     SYSTEM_LINK_ID_M3VPSS,
+@@ -275,6 +276,13 @@ Void MultiCh_swMsGetDefaultLayoutPrm(UInt32 devId, SwMsLink_CreateParams *swMsCr
+         winInfo->height = windowInfo->height;
+         winInfo->startX = windowInfo->start_X;
+         winInfo->startY = windowInfo->start_Y;
++
++        winInfo->originRatio  = windowInfo->originRatio;
++        winInfo->adjustWidth  = windowInfo->adjustWidth;
++        winInfo->adjustHeight = windowInfo->adjustHeight;
++        winInfo->adjustX      = windowInfo->adjustX;
++        winInfo->adjustY      = windowInfo->adjustY;
++
+         winInfo->channelNum = mosaicParam->chnMap[winId];
+         winInfo->bypass = mosaicParam->useLowCostScaling[winId];
+       }
+-- 
+2.7.4
+
