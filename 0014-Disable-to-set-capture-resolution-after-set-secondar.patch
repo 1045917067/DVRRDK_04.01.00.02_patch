@@ -1,0 +1,50 @@
+From bb6a45a5691e7debd064fe6c8d82ca6930367c10 Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Fri, 10 Jun 2016 18:02:19 +0800
+Subject: [PATCH 14/42] Disable to set capture resolution after set secondary
+ stream's resolution.
+
+---
+ .../mcfw/src_bios6/links_m3vpss/capture/captureLink_drv.c | 15 ++++++++++++++-
+ 1 file changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/dvr_rdk/mcfw/src_bios6/links_m3vpss/capture/captureLink_drv.c b/dvr_rdk/mcfw/src_bios6/links_m3vpss/capture/captureLink_drv.c
+index 3b6647d..7484526 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_m3vpss/capture/captureLink_drv.c
++++ b/dvr_rdk/mcfw/src_bios6/links_m3vpss/capture/captureLink_drv.c
+@@ -2299,7 +2299,6 @@ Int32 CaptureLink_drvSetScParams(CaptureLink_Obj * pObj, CaptureLink_ScParams *p
+     UInt32 instId;
+     CaptureLink_InstObj *pInst;
+     Vps_CaptScParams scParams;
+-    CaptureLink_SetResolution resPrm;
+ 
+     scParams.inScanFormat = FVID2_SF_PROGRESSIVE; // NOT USED
+     scParams.inWidth = pPrm->inWidth;
+@@ -2322,10 +2321,24 @@ Int32 CaptureLink_drvSetScParams(CaptureLink_Obj * pObj, CaptureLink_ScParams *p
+                 &scParams,
+                 NULL);
+ 
++    /*
++     *  Modified by: zzx.
++     *
++     *  Date       : Apr 18, 2014.
++     *
++     *  Description:
++     *
++     *               We just need to set the secondary stream's resolution,
++     *               not the main(the first) stream's. So comment out those
++     *               lines below.
++     *
++     */
++#if 0
+     resPrm.queId = pPrm->queId;
+     resPrm.width = scParams.outWidth;
+     resPrm.height = scParams.outHeight;
+     CaptureLink_drvSetResolution(pObj, &resPrm);
++#endif
+ 
+     return (status);
+ }
+-- 
+2.7.4
+
