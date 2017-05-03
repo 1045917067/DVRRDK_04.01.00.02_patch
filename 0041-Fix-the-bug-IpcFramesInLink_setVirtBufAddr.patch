@@ -1,0 +1,26 @@
+From 8d9d6ff8dda3e7c4a2c2a1f287177440d477a91f Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Tue, 9 Aug 2016 14:11:41 +0800
+Subject: [PATCH 41/42] Fix the bug: IpcFramesInLink_setVirtBufAddr
+
+---
+ dvr_rdk/mcfw/src_linux/links/ipcFramesIn/ipcFramesInLink_tsk.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/dvr_rdk/mcfw/src_linux/links/ipcFramesIn/ipcFramesInLink_tsk.c b/dvr_rdk/mcfw/src_linux/links/ipcFramesIn/ipcFramesInLink_tsk.c
+index a6447bb..5b3e9fb 100755
+--- a/dvr_rdk/mcfw/src_linux/links/ipcFramesIn/ipcFramesInLink_tsk.c
++++ b/dvr_rdk/mcfw/src_linux/links/ipcFramesIn/ipcFramesInLink_tsk.c
+@@ -663,7 +663,8 @@ static Void IpcFramesInLink_setVirtBufAddr(IpcFramesInLink_Obj * pObj,
+       &size,
+       &cOffset);
+     OSA_assert(status == 0);
+-    if (srPtr[0][0] == IPC_LINK_INVALID_SRPTR)
++//    if (srPtr[0][0] == IPC_LINK_INVALID_SRPTR)
++    if (1)
+     {
+         bufVirtAddrStart =
+                 (Ptr)IpcFramesInLink_phyAddr2VirtAddr(pObj,
+-- 
+2.7.4
+
