@@ -1,0 +1,1478 @@
+From 2eaacb92d36a9af0043f548c012afbfc8085ab6a Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Fri, 10 Jun 2016 18:13:59 +0800
+Subject: [PATCH 22/42] Add mcfw demos and usecases.
+
+---
+ .../mcfw_api_demos/mcfw_demo/DoubleVcapVdis.c      |  46 +++
+ .../mcfw_demo/DoubleVcapVencVdecVdis.c             |  39 ++
+ .../mcfw_api_demos/mcfw_demo/SingleVcapVdis.c      |  36 ++
+ dvr_rdk/demos/mcfw_api_demos/mcfw_demo/Usecase.h   |   4 +
+ .../demos/mcfw_api_demos/mcfw_demo/cfgfileparser.c | 430 +++++++++++++++++++++
+ .../demos/mcfw_api_demos/mcfw_demo/cfgfileparser.h |  65 ++++
+ dvr_rdk/demos/mcfw_api_demos/mcfw_demo/demo.c      |  28 +-
+ dvr_rdk/demos/mcfw_api_demos/mcfw_demo/demo.h      |  12 +-
+ .../demos/mcfw_api_demos/mcfw_demo/demo_display.c  |  12 +-
+ dvr_rdk/mcfw/src_linux/MAKEFILE.MK                 |   1 +
+ .../src_linux/mcfw_api/usecases/lusim/MAKEFILE.MK  |   8 +
+ .../lusim/back/multich_singleChCapSwmsDis.c        |  96 +++++
+ .../lusim/multich_doubleChCapNsfEncDecSwMsDis.c    | 279 +++++++++++++
+ .../usecases/lusim/multich_doubleChCapSwmsDis.c    |  96 +++++
+ .../usecases/lusim/multich_singleChCapSwmsDis.c    |  67 ++++
+ .../multich_progressive_4d1_vcap_venc_vdec_vdis.c  |   4 +-
+ .../mcfw_api/usecases/ti816x/multich_hd_sdi_dvr.c  |   4 +
+ 17 files changed, 1216 insertions(+), 11 deletions(-)
+ create mode 100755 dvr_rdk/demos/mcfw_api_demos/mcfw_demo/DoubleVcapVdis.c
+ create mode 100755 dvr_rdk/demos/mcfw_api_demos/mcfw_demo/DoubleVcapVencVdecVdis.c
+ create mode 100755 dvr_rdk/demos/mcfw_api_demos/mcfw_demo/SingleVcapVdis.c
+ create mode 100755 dvr_rdk/demos/mcfw_api_demos/mcfw_demo/Usecase.h
+ create mode 100755 dvr_rdk/demos/mcfw_api_demos/mcfw_demo/cfgfileparser.c
+ create mode 100755 dvr_rdk/demos/mcfw_api_demos/mcfw_demo/cfgfileparser.h
+ create mode 100755 dvr_rdk/mcfw/src_linux/mcfw_api/usecases/lusim/MAKEFILE.MK
+ create mode 100755 dvr_rdk/mcfw/src_linux/mcfw_api/usecases/lusim/back/multich_singleChCapSwmsDis.c
+ create mode 100755 dvr_rdk/mcfw/src_linux/mcfw_api/usecases/lusim/multich_doubleChCapNsfEncDecSwMsDis.c
+ create mode 100755 dvr_rdk/mcfw/src_linux/mcfw_api/usecases/lusim/multich_doubleChCapSwmsDis.c
+ create mode 100755 dvr_rdk/mcfw/src_linux/mcfw_api/usecases/lusim/multich_singleChCapSwmsDis.c
+
+diff --git a/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/DoubleVcapVdis.c b/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/DoubleVcapVdis.c
+new file mode 100755
+index 0000000..c92e650
+--- /dev/null
++++ b/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/DoubleVcapVdis.c
+@@ -0,0 +1,46 @@
++#include <demo.h>
++#include "Usecase.h"
++
++Void DoubleVcapVdis()
++{
++    VSYS_PARAMS_S vsysParams;
++    VCAP_PARAMS_S vcapParams;
++    VDIS_PARAMS_S vdisParams;
++
++
++    vcapParams.numChn = 2;
++    vdisParams.numChannels = 2;
++
++    Vsys_params_init(&vsysParams);
++    vsysParams.enableCapture = TRUE;
++    vsysParams.numSwMs       = 2;
++    vsysParams.numDisplays   = 2;
++    Vsys_init(&vsysParams);
++
++    Vcap_params_init(&vcapParams);
++    vcapParams.deviceParams[VCAP_DEV_VIN0A].portEnable  = TRUE;
++    vcapParams.deviceParams[VCAP_DEV_VIN0A].standard    = VSYS_STD_1080I_60;
++    vcapParams.deviceParams[VCAP_DEV_VIN0A].inScanFormat= SYSTEM_SF_INTERLACED;
++    vcapParams.deviceParams[VCAP_DEV_VIN1A].portEnable  = TRUE;
++    vcapParams.deviceParams[VCAP_DEV_VIN1A].standard    = VSYS_STD_1080I_60;
++    vcapParams.deviceParams[VCAP_DEV_VIN1A].inScanFormat= SYSTEM_SF_INTERLACED;
++    Vcap_init(&vcapParams);
++
++    Vdis_params_init(&vdisParams);
++    vdisParams.deviceParams[VDIS_DEV_HDMI].enable       = TRUE;
++    vdisParams.deviceParams[VDIS_DEV_HDMI].resolution   = VSYS_STD_1080I_60;
++    vdisParams.deviceParams[VDIS_DEV_DVO2].enable       = TRUE;
++    vdisParams.deviceParams[VDIS_DEV_DVO2].resolution   = VSYS_STD_1080I_60;
++    vdisParams.deviceParams[VDIS_DEV_HDCOMP].enable     = FALSE;
++    vdisParams.deviceParams[VDIS_DEV_HDCOMP].resolution = VSYS_STD_1080I_60;
++    vdisParams.deviceParams[VDIS_DEV_SD].enable         = TRUE;
++    vdisParams.deviceParams[VDIS_DEV_SD].resolution     = VSYS_STD_NTSC;
++    Vdis_init(&vdisParams);
++
++ 	Vsys_configureDisplay();
++    MultiCh_doubleChCapSwmsDis();
++    
++    Vdis_start();
++    Vcap_start();
++}
++
+diff --git a/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/DoubleVcapVencVdecVdis.c b/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/DoubleVcapVencVdecVdis.c
+new file mode 100755
+index 0000000..f1ed334
+--- /dev/null
++++ b/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/DoubleVcapVencVdecVdis.c
+@@ -0,0 +1,39 @@
++#include <demo.h>
++#include <Usecase.h>
++
++Void DoubleVcapVencVdecVdis()
++{
++    VSYS_PARAMS_S vsysParams;
++    VCAP_PARAMS_S vcapParams;
++    VENC_PARAMS_S vencParams;
++    VDEC_PARAMS_S vdecParams;
++    VDIS_PARAMS_S vdisParams;
++
++    Vsys_params_init(&vsysParams);
++    Vcap_params_init(&vcapParams);
++    Venc_params_init(&vencParams);
++    Vdec_params_init(&vdecParams);
++    Vdis_params_init(&vdisParams);
++
++    Vsys_init(&vsysParams);
++    Vcap_init(&vcapParams);
++    Venc_init(&vencParams);
++    Vdec_init(&vdecParams);
++    
++    vdisParams.deviceParams[VDIS_DEV_HDMI].resolution   =VSYS_STD_720P_60;
++    /* Since HDCOMP and DVO2 are tied together they must have same resolution */
++    vdisParams.deviceParams[VDIS_DEV_DVO2].resolution   =VSYS_STD_720P_60;
++    vdisParams.deviceParams[VDIS_DEV_HDCOMP].enable = FALSE;
++    vdisParams.deviceParams[VDIS_DEV_HDCOMP].resolution   =VSYS_STD_720P_60;
++    vdisParams.deviceParams[VDIS_DEV_SD].resolution     = VSYS_STD_NTSC;
++    Vdis_init(&vdisParams);
++
++    Vsys_configureDisplay();
++
++    Multich_doubleChCapNsfEncDecSwMsDis();
++    Vdis_start();
++    Vdec_start();
++    Venc_start();
++    Vcap_start();
++
++}
+diff --git a/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/SingleVcapVdis.c b/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/SingleVcapVdis.c
+new file mode 100755
+index 0000000..0e92adb
+--- /dev/null
++++ b/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/SingleVcapVdis.c
+@@ -0,0 +1,36 @@
++#include <demo.h>
++#include "Usecase.h"
++
++Void SingleVcapVdis()
++{
++    VSYS_PARAMS_S vsysParams;
++    VCAP_PARAMS_S vcapParams;
++    VDIS_PARAMS_S vdisParams;
++
++    vcapParams.numChn = 1;
++    vdisParams.numChannels = 1;
++
++    Vsys_params_init(&vsysParams);
++    vsysParams.enableCapture = TRUE;
++    vsysParams.numSwMs       = 1;
++    vsysParams.numDisplays   = 1;
++    Vsys_init(&vsysParams);
++
++    Vcap_params_init(&vcapParams);
++    vcapParams.deviceParams[VCAP_DEV_VIN0A].portEnable  = TRUE;
++    vcapParams.deviceParams[VCAP_DEV_VIN0A].standard    = VSYS_STD_1080P_60;
++    vcapParams.deviceParams[VCAP_DEV_VIN0A].inScanFormat= SYSTEM_SF_PROGRESSIVE;
++    Vcap_init(&vcapParams);
++
++    Vdis_params_init(&vdisParams);
++    vdisParams.deviceParams[VDIS_DEV_HDMI].resolution = VSYS_STD_1080P_60;
++    Vdis_tiedVencInit(VDIS_DEV_HDMI, VDIS_DEV_HDCOMP, &vdisParams);
++    Vdis_init(&vdisParams);
++
++ 	Vsys_configureDisplay();
++    MultiCh_singleChCapSwmsDis();
++    
++    Vdis_start();
++    Vcap_start();
++}
++
+diff --git a/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/Usecase.h b/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/Usecase.h
+new file mode 100755
+index 0000000..801dd17
+--- /dev/null
++++ b/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/Usecase.h
+@@ -0,0 +1,4 @@
++Void  MultiCh_doubleChCapSwmsDis();
++Void  MultiCh_singleChCapSwmsDis();
++Void  Multich_doubleChCapNsfEncDecSwMsDis();
++
+diff --git a/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/cfgfileparser.c b/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/cfgfileparser.c
+new file mode 100755
+index 0000000..ec0bbcf
+--- /dev/null
++++ b/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/cfgfileparser.c
+@@ -0,0 +1,430 @@
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include "dictionary.h"
++#include "iniparser.h"
++#include "cfgfileparser.h"
++
++#include <ti/xdais/xdas.h>
++#include <ti/xdais/dm/xdm.h>
++#include <ti/xdais/dm/ivideo.h>
++#include <mcfw/interfaces/common_def/ti_vsys_common_def.h>
++
++#define CAPTURE_SEC_NAME                        "CAPTURE"
++#define CAPTURE_STD                             "captureStd"
++
++#define DISPLAY_SEC_NAME                        "DISPLAY"
++#define DISPLAY_STD                             "displayStd"
++
++#define ENCODER_SEC_NAME                        "ENCODERCH"
++#define ENCODER_CHID                            "encoderChannelId"
++#define ENCODER_FORMAT                          "encoderFormat"
++#define ENCODER_DEFAULT_FORMAT                  "H264HP"
++#define ENCODER_FRAME_RATE                      "encoderFrameRate"
++#define ENCODER_DEFAULT_FRAME_RATE              60
++#define ENCODER_INTRA_FRAME_INTERVAL            "encoderIntraFrameInterval"
++#define ENCODER_DEFAULT_INTRA_FRAME_INTERVAL    60
++#define ENCODER_RATECTRL                        "encoderRateCtrl"
++#define ENCODER_DEFAULT_RATECTRL                "CBR"
++#define ENCODER_BIT_RATE                        "encoderBitRate"
++#define ENCODER_DEFAULT_BIT_RATE                4000
++#define ENCODER_TRANS_TYPE                      "encoderTransType"
++
++#define DECODER_SEC_NAME                        "DECODERCH"
++#define DECODER_CHID                            "decoderChannelId"
++#define DECODER_FORMAT                          "decoderFormat"
++#define DECODER_DEFAULT_FORMAT                  "H264HP"
++#define DECODER_FRAME_RATE                      "decoderFrameRate"
++#define DECODER_DEFAULT_FRAME_RATE              60
++#define DECODER_INTRA_FRAME_INTERVAL            "decoderIntraFrameInterval"
++#define DECODER_DEFAULT_INTRA_FRAME_INTERVAL    60
++#define DECODER_RATECTRL                        "decoderRateCtrl"
++#define DECODER_DEFAULT_RATECTRL                "CBR"
++#define DECODER_BIT_RATE                        "decoderBitRate"
++#define DECODER_DEFAULT_BIT_RATE                4000
++#define DECODER_TRANS_TYPE                      "decoderTransType"
++#define DECODER_RTSPURL                         "decoderRTSPURL"
++
++void cfgStdString2Int(const char *keyString, UInt32 *keyInt)
++{
++    
++    if ( !strcmp(keyString,"WUXGA_60"))
++        *keyInt = VSYS_STD_WUXGA_60;
++    else if ( !strcmp(keyString,"UXGA_60"))
++        *keyInt = VSYS_STD_UXGA_60;
++    else if ( !strcmp(keyString,"SXGAP_60"))
++        *keyInt = VSYS_STD_SXGAP_60;
++    else if ( !strcmp(keyString,"SXGA_60"))
++        *keyInt = VSYS_STD_SXGA_60;
++    else if ( !strcmp(keyString,"WXGA_60"))
++        *keyInt = VSYS_STD_WXGA_60;
++    else if ( !strcmp(keyString,"XGA_60"))
++        *keyInt = VSYS_STD_XGA_60;
++    else if ( !strcmp(keyString,"SVGA_60"))
++        *keyInt = VSYS_STD_SVGA_60;
++    else if ( !strcmp(keyString,"VGA_60"))
++        *keyInt = VSYS_STD_VGA_60;
++    else if ( !strcmp(keyString,"CIF")) 
++        *keyInt = VSYS_STD_CIF;
++
++    else if ( !strcmp(keyString,"1080P_60")) 
++        *keyInt = VSYS_STD_1080P_60;
++    else if ( !strcmp(keyString,"1080P_50"))
++        *keyInt = VSYS_STD_1080P_50;
++    else if ( !strcmp(keyString,"1080P_30"))
++        *keyInt = VSYS_STD_1080P_30;
++    else if ( !strcmp(keyString,"1080P_25"))
++        *keyInt = VSYS_STD_1080P_25;
++    else if ( !strcmp(keyString,"1080P_24"))
++        *keyInt = VSYS_STD_1080P_24;
++    else if ( !strcmp(keyString,"1080I_60")) 
++        *keyInt = VSYS_STD_1080I_60;
++    else if ( !strcmp(keyString,"1080I_50")) 
++        *keyInt = VSYS_STD_1080I_50;
++    else if ( !strcmp(keyString,"720P_60")) 
++        *keyInt = VSYS_STD_720P_60;
++    else if ( !strcmp(keyString,"720P_50")) 
++        *keyInt = VSYS_STD_720P_50;
++    else if ( !strcmp(keyString,"720P_30")) 
++        *keyInt = VSYS_STD_720P_30;
++    else if ( !strcmp(keyString,"720P_25")) 
++        *keyInt = VSYS_STD_720P_25;
++    else if ( !strcmp(keyString,"720P_24")) 
++        *keyInt = VSYS_STD_720P_24;
++    
++    else if ( !strcmp(keyString,"576P_50")) 
++        *keyInt = VSYS_STD_576P;
++    else if ( !strcmp(keyString,"576P_25")) 
++        *keyInt = VSYS_STD_576P_25;
++    else if ( !strcmp(keyString,"576I")) 
++        *keyInt = VSYS_STD_576I;
++    else if ( !strcmp(keyString,"480P_60")) 
++        *keyInt = VSYS_STD_480P;
++    else if ( !strcmp(keyString,"480P_30")) 
++        *keyInt = VSYS_STD_480P_30;
++    else if ( !strcmp(keyString,"480I")) 
++        *keyInt = VSYS_STD_480I;
++    else if ( !strcmp(keyString,"PAL")) 
++        *keyInt = VSYS_STD_PAL;
++    else if ( !strcmp(keyString,"NTSC")) 
++        *keyInt = VSYS_STD_NTSC;
++    else { 
++        *keyInt = VSYS_STD_1080P_60;
++        printf("Standard Set Error In Config File\n");
++    }
++
++}
++/*
++void cfgFormatString2Int(const char *keyString, UInt32 *keyInt ,UInt32 *profile)
++{
++    if (!strcmp(keyString,"H264HP")) {
++        *keyInt     = IVIDEO_H264HP;
++        *profile    = IH264_HIGH_PROFILE;
++    } else if (!strcmp(keyString,"H264MP")) {
++        *keyInt     = IVIDEO_H264MP;
++        *profile    = IH264_MAIN_PROFILE;    
++    } else if (!strcmp(keyString,"H264BP")) {
++        *keyInt     = IVIDEO_H264BP;
++        *profile    = IH264_BASELINE_PROFILE;
++    } else if (!strcmp(keyString,"MPEG4SP")) {
++        *keyInt     = IVIDEO_MPEG4SP;
++    } else if (!strcmp(keyString,"MJPEG")) {
++        *keyInt = IVIDEO_MPEG;
++    } else {
++        *keyInt     = IVIDEO_H264HP;
++        *profile    = IH264_HIGH_PROFILE;
++        printf("Encoder/Decoder format set error in config file\n");
++    }
++}
++*/
++void cfgRateCtrlString2Int(const char *keyString, UInt32 *keyInt)
++{
++    if (!strcmp(keyString,"CBR"))
++        *keyInt = 1;
++    else if (!strcmp(keyString,"VBR"))
++        *keyInt = 0;
++    else {
++        *keyInt = 0;
++        printf("Encoder/Decoder rateCtrl set error in config file\n");
++    }
++}
++
++void cfgTransTypeString2Int(const char *keyString, UInt32 *keyInt)
++{
++    if (!strcmp(keyString,"RTSP"))
++        *keyInt = 0;
++    else if (!strcmp(keyString,"TCP"))
++        *keyInt = 1;
++    else if (!strcmp(keyString,"TS"))
++        *keyInt = 2;
++    else {
++        *keyInt = 0; 
++        printf("Encoder transType Set Error In Config File\n");
++    }
++}
++
++int captureCfgInit(dictionary *ini, struct multiChCfg *multiChCfg)
++{
++    UInt32 i,keyInt;
++    char **secKeys;
++    char *keyString; 
++    char tempString[1024]; 
++    struct captureCfg *captureCfg;
++    
++    /* Checking Capture */
++    secKeys = iniparser_getseckeys(ini,CAPTURE_SEC_NAME);
++    if ( NULL == secKeys ) {
++        printf("NO Capture in config file\n");
++        return -1;
++    }
++   
++    captureCfg = multiChCfg->captureCfg;
++    for ( i = 0 ; i < 4 ; i ++ ) {
++        sprintf(tempString,"%s:%s%d",CAPTURE_SEC_NAME,CAPTURE_STD,i);
++        keyString = iniparser_getstring(ini,tempString,NULL);
++        if ( NULL == keyString )
++            continue;
++        
++        /* Geting Capture Instance Number */
++        multiChCfg->captureNum ++;
++        
++        cfgStdString2Int(keyString,&keyInt);    
++        captureCfg[i].standard      = keyInt;
++        captureCfg[i].inScanFormat  = Vsys_isStdInterlaced(captureCfg[i].standard);
++        captureCfg[i].inFrameRate   = Vsys_getStdRate(captureCfg[i].standard);
++        Vsys_getStdSize(captureCfg[i].standard,&captureCfg[i].inWidth,&captureCfg[i].inHeight);
++    }
++    return 0;
++}
++
++int displayCfgInit(dictionary *ini, struct multiChCfg *multiChCfg)
++{
++    UInt32 i,keyInt;
++    char **secKeys;
++    char *keyString; 
++    char tempString[1024]; 
++    struct displayCfg *displayCfg;
++    
++    /* Checking Display */
++    secKeys = iniparser_getseckeys(ini,DISPLAY_SEC_NAME);
++    if ( NULL == secKeys ) {
++        printf("NO Display in config file\n");
++        return -1;
++    }
++    
++    displayCfg = multiChCfg->displayCfg;
++    for ( i = 0 ; i < 4 ; i ++ ) {
++        sprintf(tempString,"%s:%s%d",DISPLAY_SEC_NAME,DISPLAY_STD,i);
++        keyString = iniparser_getstring(ini,tempString,NULL);
++        if ( NULL == keyString )
++            continue;
++        
++        /* Geting Display number*/
++        multiChCfg->displayNum ++;
++        
++        cfgStdString2Int(keyString,&keyInt);    
++        displayCfg[i].standard      = keyInt;
++        displayCfg[i].outFrameRate  = Vsys_getStdRate(displayCfg[i].standard);
++        Vsys_getStdSize(displayCfg[i].standard,&displayCfg[i].outWidth,&displayCfg[i].outHeight);
++    }
++    
++    return 0;
++}
++
++int encoderChCfgInit(dictionary *ini, struct multiChCfg *multiChCfg)
++{    
++    UInt32 i,keyInt,profile;
++    char **secKeys;
++    char *keyString; 
++    char tempString[1024]; 
++    struct encoderChCfg *encoderChCfg;
++
++    encoderChCfg = multiChCfg->encoderChCfg;
++    for ( i = 0 ; i < 16 ; i ++) {
++        /* Checking Encoder */
++        sprintf(tempString,"%s%d",ENCODER_SEC_NAME,i);
++        secKeys = iniparser_getseckeys(ini,tempString);
++        if ( NULL == secKeys ) {
++            return 0;
++        }
++        
++        /* Geting encoderCh number*/
++        multiChCfg->encoderChNum ++;
++
++        sprintf(tempString,"%s%d:%s",ENCODER_SEC_NAME,i,ENCODER_CHID);
++        keyInt = iniparser_getint(ini,tempString,0);
++        if ( keyInt < 0 || keyInt > 15 ) {
++            keyInt = 0;
++            printf("EncoderChannelId set error in config file\n");
++        }
++        printf("HHHkeyInt =%d\n",keyInt);
++        encoderChCfg[i].channelId   = keyInt;
++
++        sprintf(tempString,"%s%d:%s",ENCODER_SEC_NAME,i,ENCODER_FORMAT);
++        keyString = iniparser_getstring(ini,tempString,ENCODER_DEFAULT_FORMAT);
++        //cfgFormatString2Int(keyString,&keyInt,&profile);    
++        printf("HHHstring =%s keyInt =%d\n",keyString,keyInt);
++        encoderChCfg[i].format      = keyInt;
++        profile = 0;
++        encoderChCfg[i].profile     = profile;
++        
++        sprintf(tempString,"%s%d:%s",ENCODER_SEC_NAME,i,ENCODER_FRAME_RATE);
++        keyInt = iniparser_getint(ini,tempString,ENCODER_DEFAULT_FRAME_RATE);
++        printf("HHHframgeRate =%d\n",keyInt);
++        encoderChCfg[i].frameRate   = keyInt;
++        
++        sprintf(tempString,"%s%d:%s",ENCODER_SEC_NAME,i,ENCODER_INTRA_FRAME_INTERVAL);
++        keyInt = iniparser_getint(ini,tempString,ENCODER_DEFAULT_INTRA_FRAME_INTERVAL);
++        printf("HHHintraFrameInterval =%d\n",keyInt);
++        encoderChCfg[i].intraFrameInterval   = keyInt;
++        
++        sprintf(tempString,"%s%d:%s",ENCODER_SEC_NAME,i,ENCODER_RATECTRL);
++        keyString = iniparser_getstring(ini,tempString,ENCODER_DEFAULT_RATECTRL);
++        cfgRateCtrlString2Int(keyString,&keyInt);    
++        printf("HHHstring =%s keyInt =%d\n",keyString,keyInt);
++        encoderChCfg[i].rateCtrl    = keyInt;
++ 
++        sprintf(tempString,"%s%d:%s",ENCODER_SEC_NAME,i,ENCODER_BIT_RATE);
++        keyInt = iniparser_getint(ini,tempString,ENCODER_DEFAULT_BIT_RATE);
++        printf("HHHbitRate =%d\n",keyInt);
++        encoderChCfg[i].bitRate   = keyInt * 1000;
++
++        sprintf(tempString,"%s%d:%s",ENCODER_SEC_NAME,i,ENCODER_TRANS_TYPE);
++        keyString = iniparser_getstring(ini,tempString,NULL);
++        if ( keyString == NULL )
++            continue;
++        cfgTransTypeString2Int(keyString,&keyInt);    
++        printf("HHHstring =%s keyInt =%d\n",keyString,keyInt);
++        encoderChCfg[i].transType = keyInt;
++    }
++ 
++    return 0;
++}
++
++int decoderChCfgInit(dictionary *ini, struct multiChCfg *multiChCfg)
++{    
++    char **secKeys;
++    char *keyString; 
++    char tempString[1024]; 
++    UInt32 i,keyInt,profile;
++    struct decoderChCfg *decoderChCfg;
++   
++    decoderChCfg = multiChCfg->decoderChCfg;
++    for ( i = 0 ; i < 16 ; i ++) {
++        /* Checking Decoder */
++        sprintf(tempString,"%s%d",DECODER_SEC_NAME,i);
++        secKeys = iniparser_getseckeys(ini,tempString);
++        if ( NULL == secKeys ) {
++            return 0;
++        }
++        
++        /* Geting encoderCh number*/
++        multiChCfg->decoderChNum ++;
++        
++        sprintf(tempString,"%s%d:%s",DECODER_SEC_NAME,i,DECODER_CHID);
++        keyInt = iniparser_getint(ini,tempString,0);
++        if ( keyInt < 0 || keyInt > 15 ) {
++            keyInt = 0;
++            printf("decoderChannelId set error in config File\n");
++        }
++        printf("HHHkeyInt =%d\n",keyInt);
++        decoderChCfg[i].channelId   = keyInt;
++        
++        sprintf(tempString,"%s%d:%s",DECODER_SEC_NAME,i,DECODER_FORMAT);
++        keyString = iniparser_getstring(ini,tempString,DECODER_DEFAULT_FORMAT);
++        //cfgFormatString2Int(keyString,&keyInt,&profile);    
++        printf("HHHstring =%s keyInt =%d\n",keyString,keyInt);
++        decoderChCfg[i].format      = keyInt;
++        profile = 0;
++        decoderChCfg[i].profile     = profile;
++        
++        sprintf(tempString,"%s%d:%s",DECODER_SEC_NAME,i,DECODER_FRAME_RATE);
++        keyInt = iniparser_getint(ini,tempString,DECODER_DEFAULT_FRAME_RATE);
++        printf("HHHframgeRate =%d\n",keyInt);
++        decoderChCfg[i].frameRate   = keyInt;
++        
++        sprintf(tempString,"%s%d:%s",DECODER_SEC_NAME,i,DECODER_INTRA_FRAME_INTERVAL);
++        keyInt = iniparser_getint(ini,tempString,DECODER_DEFAULT_INTRA_FRAME_INTERVAL);
++        printf("HHHintraFrameInterval =%d\n",keyInt);
++        decoderChCfg[i].intraFrameInterval   = keyInt;
++        
++        sprintf(tempString,"%s%d:%s",DECODER_SEC_NAME,i,DECODER_RATECTRL);
++        keyString = iniparser_getstring(ini,tempString,DECODER_DEFAULT_RATECTRL);
++        cfgRateCtrlString2Int(keyString,&keyInt);    
++        decoderChCfg[i].rateCtrl    = keyInt;
++        printf("HHHstring =%s keyInt =%d\n",keyString,keyInt);
++ 
++        sprintf(tempString,"%s%d:%s",DECODER_SEC_NAME,i,DECODER_BIT_RATE);
++        keyInt = iniparser_getint(ini,tempString,DECODER_DEFAULT_BIT_RATE);
++        printf("HHHbitRate =%d\n",keyInt);
++        decoderChCfg[i].bitRate     = keyInt * 1000;
++
++        sprintf(tempString,"%s%d:%s",DECODER_SEC_NAME,i,DECODER_TRANS_TYPE);
++        keyString = iniparser_getstring(ini,tempString,NULL);
++        if ( keyString == NULL )
++            continue;
++        cfgTransTypeString2Int(keyString,&keyInt);    
++        printf("HHHstring =%s keyInt =%d\n",keyString,keyInt);
++        decoderChCfg[i].transType   = keyInt;
++        
++        sprintf(tempString,"%s%d:%s",DECODER_SEC_NAME,i,DECODER_RTSPURL);
++        keyString = iniparser_getstring(ini,tempString,NULL);
++        if ( keyString != NULL ) {
++            strncpy(decoderChCfg[i].RTSPURL,keyString,sizeof(keyString));
++        }
++       
++    }
++ 
++    return 0;
++}
++
++int multiChCfgInit(char *cfgFileName, struct multiChCfg *multiChCfg)
++{
++    dictionary *ini = NULL;
++
++    ini = iniparser_load(cfgFileName);
++    if ( NULL == ini ) {
++        printf("iniparser_load failed\n");
++        return -1;
++    }
++    
++    memset(multiChCfg,0x00,sizeof(struct multiChCfg));
++    captureCfgInit(ini,multiChCfg);
++    displayCfgInit(ini,multiChCfg);
++    encoderChCfgInit(ini,multiChCfg);
++    decoderChCfgInit(ini,multiChCfg);
++
++    iniparser_freedict(ini);
++
++    return 0;
++}
++
++void captureCfgPrint(struct multiChCfg *multiChCfg)
++{
++    int i;
++    struct captureCfg *captureCfg = multiChCfg->captureCfg;
++    
++    printf("captureNum  =%d\n",multiChCfg->captureNum);
++    for (i = 0 ; i < 4 ; i++) {
++        printf("captureStd  =%d\n",captureCfg[i].standard);
++        printf("inWidth =%d\n",captureCfg[i].inWidth);
++        printf("inHeight    =%d\n",captureCfg[i].inHeight);
++        printf("inScanFormat    =%02x\n",captureCfg[i].inScanFormat);
++        printf("inFrameRate =%d\n",captureCfg[i].inFrameRate);
++    }
++}
++
++void displayCfgPrint(struct multiChCfg *multiChCfg)
++{
++    int i;
++    struct displayCfg *displayCfg = multiChCfg->displayCfg;
++
++    printf("displayNum =%d\n",multiChCfg->displayNum);
++    for ( i = 0 ; i < 4 ; i++) {
++        printf("displayStd =%d\n",displayCfg[i].standard);
++        printf("outWidth   =%d\n",displayCfg[i].outWidth);
++        printf("outHeight  =%d\n",displayCfg[i].outHeight);
++        printf("outFrameRate=%d\n",displayCfg[i].outFrameRate);
++    }
++}
++
+diff --git a/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/cfgfileparser.h b/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/cfgfileparser.h
+new file mode 100755
+index 0000000..142c815
+--- /dev/null
++++ b/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/cfgfileparser.h
+@@ -0,0 +1,65 @@
++#ifndef __CFGFILEPARSER__
++#define __CFGFILEPARSER__
++
++#include <demos/mcfw_api_demos/mcfw_demo/demo.h>
++
++#define MAX_INPUT_STRING_SIZE   256
++
++struct captureCfg
++{
++    UInt32  standard;
++    UInt32  inWidth;
++    UInt32  inHeight;
++    UInt32  inFrameRate;
++    UInt32  inScanFormat;
++};
++
++struct displayCfg
++{
++    UInt32  standard;
++    UInt32  outWidth;
++    UInt32  outHeight;
++    UInt32  outFrameRate;
++};
++
++struct encoderChCfg
++{
++    UInt32  channelId;
++    UInt32  format;
++    UInt32  profile;
++    UInt32  frameRate;
++    UInt32  intraFrameInterval;
++    UInt32  rateCtrl;
++    UInt32  bitRate;
++    UInt32  transType;
++};
++
++struct decoderChCfg
++{
++    UInt32  channelId;
++    UInt32  format;
++    UInt32  profile;
++    UInt32  frameRate;
++    UInt32  intraFrameInterval;
++    UInt32  rateCtrl;
++    UInt32  bitRate;
++    UInt32  transType;
++    UInt32  serverPort;
++    Char    serverIp[MAX_INPUT_STRING_SIZE];
++    Char    RTSPURL[MAX_INPUT_STRING_SIZE];
++};
++
++struct multiChCfg
++{
++    UInt32 captureNum;
++    UInt32 displayNum;
++    UInt32 encoderChNum;
++    UInt32 decoderChNum;
++    struct captureCfg     captureCfg[4];
++    struct displayCfg     displayCfg[4];
++    struct encoderChCfg   encoderChCfg[16];
++    struct decoderChCfg   decoderChCfg[16];
++};
++
++int multiChCfgInit(char *cfgFileName, struct multiChCfg *multiChCfg);
++#endif
+diff --git a/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/demo.c b/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/demo.c
+index 12f4d89..df7a2ba 100755
+--- a/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/demo.c
++++ b/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/demo.c
+@@ -7,6 +7,7 @@
+ #include <ucontext.h>
+ #include <unwind.h>
+ #include <osa.h>
++#include "cfgfileparser.h"
+ 
+ #define DEMO_ENABLE_SPL_USECASES             
+ 
+@@ -159,6 +160,7 @@ int main()
+ 
+         switch(ch)
+         {
++#if 0
+ #if defined (TI_814X_BUILD) || defined (TI_8107_BUILD)
+             case '1':
+                 Demo_run(DEMO_VCAP_VENC_VDEC_VDIS_PROGRESSIVE);
+@@ -210,6 +212,18 @@ int main()
+                 Demo_run(DEMO_HD_SD_5CH);
+                 break;
+ #endif
++#else
++            case '1':
++                Demo_run(DoubleVcapVdis);
++                break;
++            case '2':
++                Demo_run(DoubleVcapVencVdecVdis);
++                break;
++            case '3':
++                Demo_run(SingleVcapVdis);
++                break;
++
++#endif
+             case 'e':
+                 done = TRUE;
+                 break;
+@@ -297,7 +311,7 @@ Int32 Demo_eventHandler(UInt32 eventId, Ptr pPrm, Ptr appData)
+     
+     return 0;
+ }
+-
++#if 0
+ int Demo_run(int demoId)
+ {
+     int status;
+@@ -395,7 +409,17 @@ int Demo_run(int demoId)
+ 
+     return 0;
+ }
+-
++#else
++int Demo_run(Multich_RunFunc multichRunFunc)
++{
++    struct multiChCfg multiChCfg;
++    
++    multiChCfgInit("1080.ini",&multiChCfg);
++    multichRunFunc();
++    Vsys_registerEventHandler(Demo_eventHandler, NULL);
++    return 0;
++}
++#endif
+ int Demo_startStop(int demoId, Bool startDemo)
+ {
+     if (gDemo_info.audioInitialized == TRUE)
+diff --git a/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/demo.h b/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/demo.h
+index 32feb4b..943480e 100755
+--- a/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/demo.h
++++ b/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/demo.h
+@@ -43,13 +43,15 @@
+ #include <demos/mcfw_api_demos/mcfw_demo/demo_swms.h>
+ 
+ 
++typedef void (*Multich_RunFunc)();
++
+ /* To select if FBDEV interface is used for Graphics */
+ #if defined(TI_814X_BUILD)
+ #define USE_FBDEV   1
+ #endif
+ 
+ #if defined(TI_8107_BUILD)
+-#define USE_FBDEV   1
++//#define USE_FBDEV   1
+ #endif
+ 
+ #if defined(TI_816X_BUILD)
+@@ -292,7 +294,11 @@ int Demo_printBuffersInfo();
+ int Demo_printAvsyncInfo();
+ int Demo_switchIVAMap();
+ int  Demo_startStop(int demoId, Bool startDemo);
++#if 0
+ int  Demo_run(int demoId);
++#else
++int  Demo_run(Multich_RunFunc multichRunFunc);
++#endif
+ char Demo_getChar();
+ int  Demo_getChId(char *string, int maxChId);
+ int  Demo_getIntValue(char *string, int minVal, int maxVal, int defaultVal);
+@@ -325,4 +331,8 @@ Bool Demo_IsDecodeActive(Void);
+ Bool Demo_isSinkDetected(void);
+ Int32 Demo_getSinkDetails(VDIS_SCREEN_INFO_S **pSInfo);
+ 
++Void  DoubleVcapVdis();
++Void  SingleVcapVdis();
++Void  DoubleVcapVencVdecVdis();
++
+ #endif /* TI_MULTICH_DEMO_H */
+diff --git a/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/demo_display.c b/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/demo_display.c
+index 4083d7f..3115823 100755
+--- a/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/demo_display.c
++++ b/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/demo_display.c
+@@ -566,7 +566,7 @@ int Demo_displaySetResolution(UInt32 displayId, UInt32 resolution)
+     if (Vdis_isSupportedDisplay(displayId))
+     {
+             Vsys_getContext(&sysContextInfo);
+-
++#if 0
+             #if USE_FBDEV
+             grpx_stop(displayId);
+             #endif
+@@ -585,12 +585,12 @@ int Demo_displaySetResolution(UInt32 displayId, UInt32 resolution)
+                 Vcap_stopWrbkCapt();
+             }
+             #endif
+-
++#endif
+             Vdis_stopDrv(displayId);
+             memset(&vdisMosaicParams, 0, sizeof(VDIS_MOSAIC_S));
+             /* Update the resolution that we are changing into */
+             Vdis_setResolution(displayId, resolution);
+-
++#if 0
+             /* Start with default layout */
+             Demo_swMsGenerateLayout(displayId, 0, gDemo_info.maxVdisChannels,
+                     layoutId,
+@@ -617,9 +617,9 @@ int Demo_displaySetResolution(UInt32 displayId, UInt32 resolution)
+             #else
+             Vdis_setMosaicParams(displayId, &vdisMosaicParams);
+             #endif
+-
++#endif
+             Vdis_startDrv(displayId);
+-
++#if 0
+             #if USE_FBDEV
+             Demo_swMsGetOutSize(resolution, &outWidth, &outHeight);
+ 
+@@ -659,7 +659,7 @@ int Demo_displaySetResolution(UInt32 displayId, UInt32 resolution)
+                 Vcap_startWrbkCapt();
+             }
+             #endif
+-
++#endif
+     }
+     return 0;
+ }
+diff --git a/dvr_rdk/mcfw/src_linux/MAKEFILE.MK b/dvr_rdk/mcfw/src_linux/MAKEFILE.MK
+index 58baee7..f1332b9 100755
+--- a/dvr_rdk/mcfw/src_linux/MAKEFILE.MK
++++ b/dvr_rdk/mcfw/src_linux/MAKEFILE.MK
+@@ -34,6 +34,7 @@ mcfw_api:
+ 	$(MAKE) -fMAKEFILE.MK -C$(dvr_rdk_PATH)/mcfw/src_linux/mcfw_api MODULE=dvr_rdk_mcfw_api $(TARGET)
+ 	$(MAKE) -fMAKEFILE.MK -C$(dvr_rdk_PATH)/mcfw/src_linux/mcfw_api/usecases/ MODULE=dvr_rdk_mcfw_api $(TARGET)
+ 	$(MAKE) -fMAKEFILE.MK -C$(dvr_rdk_PATH)/mcfw/src_linux/mcfw_api/usecases/ti81xx MODULE=dvr_rdk_mcfw_api $(TARGET)
++	$(MAKE) -fMAKEFILE.MK -C$(dvr_rdk_PATH)/mcfw/src_linux/mcfw_api/usecases/lusim MODULE=dvr_rdk_mcfw_api $(TARGET)
+ ifeq ($(PLATFORM),ti816x-evm)
+ 	$(MAKE) -fMAKEFILE.MK -C$(dvr_rdk_PATH)/mcfw/src_linux/mcfw_api/usecases/ti816x MODULE=dvr_rdk_mcfw_api $(TARGET)
+ endif 
+diff --git a/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/lusim/MAKEFILE.MK b/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/lusim/MAKEFILE.MK
+new file mode 100755
+index 0000000..416bb12
+--- /dev/null
++++ b/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/lusim/MAKEFILE.MK
+@@ -0,0 +1,8 @@
++
++include $(dvr_rdk_PATH)/makerules/common_header_a8.mk
++
++INCLUDE+= $(OSA_INC) $(SYSLINK_INC) $(MCFW_INC) $(CODEC_INC) $(DEVICES_INC)
++
++include $(dvr_rdk_PATH)/makerules/common_footer_a8.mk
++
++
+diff --git a/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/lusim/back/multich_singleChCapSwmsDis.c b/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/lusim/back/multich_singleChCapSwmsDis.c
+new file mode 100755
+index 0000000..56531d2
+--- /dev/null
++++ b/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/lusim/back/multich_singleChCapSwmsDis.c
+@@ -0,0 +1,96 @@
++/*******************************************************************************
++ *                                                                             *
++ * Copyright (c) 2009 Texas Instruments Incorporated - http://www.ti.com/      *
++ *                        ALL RIGHTS RESERVED                                  *
++ *                                                                             *
++ ******************************************************************************/
++
++#include "mcfw/src_linux/mcfw_api/usecases/multich_common.h"
++
++Void MultiCh_singleChCapSwmsDis()
++{
++    Int32 i;
++    Int32 vipInstId;
++    CaptureLink_CreateParams    capturePrm;
++    CaptureLink_VipInstParams   *pCaptureInstPrm;
++    CaptureLink_OutParams       *pCaptureOutPrm;
++    SwMsLink_CreateParams       swMsPrm[VDIS_DEV_MAX];
++    DisplayLink_CreateParams    displayPrm[VDIS_DEV_MAX];
++
++    for (i=0; i<VDIS_DEV_MAX; i++) {
++        MULTICH_INIT_STRUCT(DisplayLink_CreateParams,displayPrm[i]);
++    }
++    gVcapModuleContext.captureId     = SYSTEM_LINK_ID_CAPTURE;
++    gVdisModuleContext.swMsId[0]     = SYSTEM_LINK_ID_SW_MS_MULTI_INST_0;
++    //gVdisModuleContext.swMsId[1]     = SYSTEM_LINK_ID_SW_MS_MULTI_INST_1;
++    gVdisModuleContext.displayId[0]  = SYSTEM_LINK_ID_DISPLAY_0;
++    //gVdisModuleContext.displayId[1]  = SYSTEM_LINK_ID_DISPLAY_1;
++
++    CaptureLink_CreateParams_Init(&capturePrm);
++    capturePrm.numVipInst               = 1;
++    capturePrm.tilerEnable              = FALSE;
++    capturePrm.numBufsPerCh             = 16;
++    capturePrm.numExtraBufs             = 0;
++    capturePrm.maxBlindAreasPerCh       = 0;
++    capturePrm.isPalMode                = FALSE;
++    capturePrm.enableSdCrop             = FALSE;
++    capturePrm.doCropInCapture          = FALSE;
++
++    for(i=0; i<capturePrm.numVipInst; i++)
++    {
++        vipInstId = SYSTEM_CAPTURE_INST_VIP0_PORTA + 2*i;
++        pCaptureInstPrm                     = &capturePrm.vipInst[i];
++        pCaptureInstPrm->vipInstId          = vipInstId%SYSTEM_CAPTURE_INST_MAX;
++        pCaptureInstPrm->videoDecoderId     = 0;
++        pCaptureInstPrm->inDataFormat       = SYSTEM_DF_YUV422P;
++        pCaptureInstPrm->standard           = VSYS_STD_1080P_60;
++        pCaptureInstPrm->inScanFormat       = SYSTEM_SF_PROGRESSIVE;
++        pCaptureInstPrm->numOutput          = 1;
++        pCaptureInstPrm->numChPerOutput     = 1;
++
++        pCaptureOutPrm                      = &pCaptureInstPrm->outParams[0];
++        pCaptureOutPrm->dataFormat          = SYSTEM_DF_YUV422I_YUYV;
++        pCaptureOutPrm->scEnable            = FALSE;
++        pCaptureOutPrm->outQueId            = i;
++    }
++    capturePrm.outQueParams[0].nextLink     = gVdisModuleContext.swMsId[0];
++    //capturePrm.outQueParams[1].nextLink     = gVdisModuleContext.swMsId[1];
++    System_linkCreate(gVcapModuleContext.captureId, &capturePrm, sizeof(capturePrm));
++    
++    for (i=0; i<1; i++) {
++        swMsPrm[i].numSwMsInst                     = 1;
++        swMsPrm[i].swMsInstId[0]                   = SYSTEM_SW_MS_SC_INST_DEIHQ_SC_NO_DEI;
++        swMsPrm[i].inQueParams.prevLinkId          = gVcapModuleContext.captureId;
++        swMsPrm[i].inQueParams.prevLinkQueId       = i;
++        swMsPrm[i].outQueParams.nextLink           = gVdisModuleContext.displayId[i];
++        swMsPrm[i].outDataFormat                   = SYSTEM_DF_YUV422I_YUYV;
++        swMsPrm[i].layoutPrm.outputFPS             = 30;
++        swMsPrm[i].maxInputQueLen                  = SYSTEM_SW_MS_DEFAULT_INPUT_QUE_LEN;
++        swMsPrm[i].maxOutRes                       = VSYS_STD_1080P_30;
++        swMsPrm[i].initOutRes                      = VSYS_STD_1080P_30;
++        swMsPrm[i].numOutBuf                       = 0;
++        swMsPrm[i].enableProcessTieWithDisplay     = TRUE;
++        swMsPrm[i].enableOuputDup                  = TRUE;
++        swMsPrm[i].lineSkipMode                    = FALSE;
++        swMsPrm[i].enableLayoutGridDraw            = FALSE;
++        MultiCh_swMsGetDefaultLayoutPrm(0, &swMsPrm[i],FALSE);
++
++        displayPrm[i].displayRes                   = VSYS_STD_1080P_30;
++        displayPrm[i].numInputQueues               = 1;
++        displayPrm[i].activeQueue                  = 0;
++        displayPrm[i].inQueParams[0].prevLinkId    = gVdisModuleContext.swMsId[i];
++        displayPrm[i].inQueParams[0].prevLinkQueId = 0;
++        displayPrm[i].forceFieldSeparatedInputMode = FALSE;
++        displayPrm[i].maxDriverQueLength           = DISPLAY_LINK_MAX_DRIVER_QUEUE_LENGTH_DEFAULT;
++        displayPrm[i].displayId                    = DISPLAY_LINK_DISPLAY_AUTO_SELECT;
++    }
++    printf("create\n");
++    for (i=0; i<1; i++) {
++        System_linkCreate(gVdisModuleContext.swMsId[i], &swMsPrm[i], sizeof(swMsPrm[i]));
++        System_linkCreate(gVdisModuleContext.displayId[i], &displayPrm[i], sizeof(displayPrm[i]));
++    }
++    printf("create end\n");
++
++    MultiCh_memPrintHeapStatus();
++}
++
+diff --git a/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/lusim/multich_doubleChCapNsfEncDecSwMsDis.c b/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/lusim/multich_doubleChCapNsfEncDecSwMsDis.c
+new file mode 100755
+index 0000000..914e5f4
+--- /dev/null
++++ b/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/lusim/multich_doubleChCapNsfEncDecSwMsDis.c
+@@ -0,0 +1,279 @@
++/*******************************************************************************
++ *                                                                             *
++ * Copyright (c) 2009 Texas Instruments Incorporated - http://www.ti.com/      *
++ *                        ALL RIGHTS RESERVED                                  *
++ *                                                                             *
++ ******************************************************************************/
++
++#include "mcfw/src_linux/mcfw_api/usecases/multich_common.h"
++
++static SystemVideo_Ivahd2ChMap_Tbl systemVid_encDecIvaChMapTbl =
++{
++    .isPopulated = 1,
++    .ivaMap[0] =
++    {
++        .EncNumCh  = 1,
++        .EncChList = {0},
++        .DecNumCh  = 0,
++        .DecChList = {0},
++    },
++    .ivaMap[1] =
++    {
++        .EncNumCh  = 0,
++        .EncChList = {0},
++        .DecNumCh  = 1,
++        .DecChList = {0},
++    },
++    .ivaMap[2] =
++    {
++        .EncNumCh  = 1,
++        .EncChList = {1},
++        .DecNumCh  = 1,
++        .DecChList = {1},
++    },
++};
++
++Void Multich_doubleChCapNsfEncDecSwMsDis()
++{
++    CaptureLink_CreateParams    capturePrm;
++    CaptureLink_VipInstParams   *pCaptureInstPrm;
++    CaptureLink_OutParams       *pCaptureOutPrm;
++    NsfLink_CreateParams        nsfPrm;
++    IpcLink_CreateParams        ipcOutVpssPrm;
++    IpcLink_CreateParams        ipcInVpssPrm;
++    EncLink_CreateParams        encPrm;
++    DecLink_CreateParams        decPrm;
++    IpcLink_CreateParams        ipcOutVideoPrm;
++    IpcLink_CreateParams        ipcInVideoPrm;
++    SelectLink_CreateParams     selPrm;
++    SwMsLink_CreateParams       swMsPrm[2];
++    DisplayLink_CreateParams    displayPrm[2];
++
++    UInt32 i;
++    UInt32 vipInstId;
++    UInt32 ipcOutVpssId, ipcInVpssId;
++    UInt32 ipcOutVideoId, ipcInVideoId;
++    UInt32 selId;
++
++    MULTICH_INIT_STRUCT(NsfLink_CreateParams,nsfPrm);
++    MULTICH_INIT_STRUCT(IpcLink_CreateParams,ipcOutVpssPrm);
++    MULTICH_INIT_STRUCT(IpcLink_CreateParams,ipcInVpssPrm);
++    MULTICH_INIT_STRUCT(EncLink_CreateParams,encPrm);
++    MULTICH_INIT_STRUCT(DecLink_CreateParams,decPrm);
++    MULTICH_INIT_STRUCT(IpcLink_CreateParams,ipcOutVideoPrm);
++    MULTICH_INIT_STRUCT(IpcLink_CreateParams,ipcInVideoPrm);
++    MULTICH_INIT_STRUCT(SelectLink_CreateParams,selPrm);
++    for (i=0; i<2; i++) {
++        MULTICH_INIT_STRUCT(SwMsLink_CreateParams,swMsPrm[i]);
++        MULTICH_INIT_STRUCT(DisplayLink_CreateParams,displayPrm[i]);
++    }
++
++    gVcapModuleContext.captureId     = SYSTEM_LINK_ID_CAPTURE;
++    gVcapModuleContext.nsfId[0]      = SYSTEM_LINK_ID_NSF_0;
++    ipcOutVpssId                     = SYSTEM_VPSS_LINK_ID_IPC_OUT_M3_0;
++    ipcInVideoId                     = SYSTEM_VIDEO_LINK_ID_IPC_IN_M3_0;
++    gVencModuleContext.encId         = SYSTEM_LINK_ID_VENC_0;
++    gVdecModuleContext.decId         = SYSTEM_LINK_ID_VDEC_0;
++    ipcOutVideoId                    = SYSTEM_VIDEO_LINK_ID_IPC_OUT_M3_0;
++    ipcInVpssId                      = SYSTEM_VPSS_LINK_ID_IPC_IN_M3_0;
++    selId                            = SYSTEM_VPSS_LINK_ID_SELECT_0;
++    gVdisModuleContext.swMsId[0]     = SYSTEM_LINK_ID_SW_MS_MULTI_INST_0;
++    gVdisModuleContext.swMsId[1]     = SYSTEM_LINK_ID_SW_MS_MULTI_INST_1;
++    gVdisModuleContext.displayId[0]  = SYSTEM_LINK_ID_DISPLAY_0;
++    gVdisModuleContext.displayId[1]  = SYSTEM_LINK_ID_DISPLAY_1;
++
++    System_linkControl(
++        SYSTEM_LINK_ID_M3VIDEO,
++        SYSTEM_COMMON_CMD_SET_CH2IVAHD_MAP_TBL,
++        &systemVid_encDecIvaChMapTbl,
++        sizeof(SystemVideo_Ivahd2ChMap_Tbl),
++        TRUE
++    );
++    CaptureLink_CreateParams_Init(&capturePrm);
++    capturePrm.numVipInst               = 2;
++    capturePrm.tilerEnable              = FALSE;
++    capturePrm.numBufsPerCh             = 16;
++    capturePrm.numExtraBufs             = 0;
++    capturePrm.maxBlindAreasPerCh       = 0;
++    capturePrm.isPalMode                = FALSE;
++    capturePrm.enableSdCrop             = FALSE;
++    capturePrm.doCropInCapture          = FALSE;
++
++    for(i=0; i<capturePrm.numVipInst; i++)
++    {
++        vipInstId = SYSTEM_CAPTURE_INST_VIP0_PORTA + 2*i;
++        pCaptureInstPrm                     = &capturePrm.vipInst[i];
++        pCaptureInstPrm->vipInstId          = vipInstId%SYSTEM_CAPTURE_INST_MAX;
++        pCaptureInstPrm->videoDecoderId     = 0;
++        pCaptureInstPrm->inDataFormat       = SYSTEM_DF_YUV422P;
++        pCaptureInstPrm->standard           = SYSTEM_STD_720P_60;
++        pCaptureInstPrm->numOutput          = 1;
++        pCaptureInstPrm->numChPerOutput     = 1;
++
++        pCaptureOutPrm                      = &pCaptureInstPrm->outParams[0];
++        pCaptureOutPrm->dataFormat          = SYSTEM_DF_YUV422I_YUYV;
++        pCaptureOutPrm->scEnable            = FALSE;
++        pCaptureOutPrm->outQueId            = 0;
++    }
++    capturePrm.outQueParams[0].nextLink     = gVcapModuleContext.nsfId[0];
++    
++    nsfPrm.inQueParams.prevLinkId           = gVcapModuleContext.captureId;
++    nsfPrm.inQueParams.prevLinkQueId        = 0;
++    nsfPrm.outQueParams[0].nextLink         = ipcOutVpssId;
++    nsfPrm.bypassNsf                        = TRUE;
++    nsfPrm.tilerEnable                      = TRUE;
++    nsfPrm.numOutQue                        = 1;
++    nsfPrm.numBufsPerCh                     = 0;
++
++    ipcOutVpssPrm.inQueParams.prevLinkId    = gVcapModuleContext.nsfId[0];
++    ipcOutVpssPrm.inQueParams.prevLinkQueId = 0;
++    ipcOutVpssPrm.numOutQue                 = 1;
++    ipcOutVpssPrm.outQueParams[0].nextLink  = ipcInVideoId;
++    ipcOutVpssPrm.notifyNextLink            = TRUE;
++    ipcOutVpssPrm.notifyPrevLink            = FALSE;
++    ipcOutVpssPrm.noNotifyMode              = FALSE;
++    ipcOutVpssPrm.numChPerOutQue[0]         = 0;
++    ipcOutVpssPrm.equallyDivideChAcrossOutQues = FALSE;
++
++    ipcInVideoPrm.inQueParams.prevLinkId    = ipcOutVpssId;
++    ipcInVideoPrm.inQueParams.prevLinkQueId = 0;
++    ipcInVideoPrm.numOutQue                 = 1;
++    ipcInVideoPrm.outQueParams[0].nextLink  = gVencModuleContext.encId;
++    ipcInVideoPrm.notifyNextLink            = TRUE;
++    ipcInVideoPrm.notifyPrevLink            = FALSE;
++    ipcInVideoPrm.noNotifyMode              = FALSE;
++    ipcInVideoPrm.numChPerOutQue[0]         = 0;
++    ipcInVideoPrm.equallyDivideChAcrossOutQues = FALSE;
++
++    for (i=0; i<2; i++) {
++        encPrm.chCreateParams[i].format                             = IVIDEO_H264HP;
++        encPrm.chCreateParams[i].profile                            = IH264_HIGH_PROFILE;
++        encPrm.chCreateParams[i].dataLayout                         = IVIDEO_FIELD_SEPARATED;
++        encPrm.chCreateParams[i].fieldMergeEncodeEnable             = FALSE;
++        encPrm.chCreateParams[i].enableAnalyticinfo                 = FALSE;
++        encPrm.chCreateParams[i].maxBitRate                         = -1;
++        encPrm.chCreateParams[i].encodingPreset                     = VENC_XDM_USER_DEFINED;
++        encPrm.chCreateParams[i].rateControlPreset                  = VENC_RATE_CTRL_VBR;
++        encPrm.chCreateParams[i].enableHighSpeed                    = TRUE;
++        encPrm.chCreateParams[i].numTemporalLayer                   = VENC_TEMPORAL_LAYERS_1;
++        encPrm.chCreateParams[i].enableSVCExtensionFlag             = VENC_IH264_SVC_EXTENSION_FLAG_DISABLE;
++        encPrm.chCreateParams[i].enableWaterMarking                 = FALSE;
++
++        encPrm.chCreateParams[i].defaultDynamicParams.intraFrameInterval  = 60;
++        encPrm.chCreateParams[i].defaultDynamicParams.inputFrameRate      = 60;
++        encPrm.chCreateParams[i].defaultDynamicParams.targetFrameRate     = 60;
++        encPrm.chCreateParams[i].defaultDynamicParams.targetBitRate       = 4000*1000;
++        encPrm.chCreateParams[i].defaultDynamicParams.interFrameInterval  = 1;
++        encPrm.chCreateParams[i].defaultDynamicParams.mvAccuracy          = IVIDENC2_MOTIONVECTOR_QUARTERPEL;
++        encPrm.chCreateParams[i].defaultDynamicParams.rcAlg               = 1;
++        encPrm.chCreateParams[i].defaultDynamicParams.qpMin               = 0;
++        encPrm.chCreateParams[i].defaultDynamicParams.qpMax               = 51;
++        encPrm.chCreateParams[i].defaultDynamicParams.qpInit              = -1;
++        encPrm.chCreateParams[i].defaultDynamicParams.vbrDuration         = 8;
++        encPrm.chCreateParams[i].defaultDynamicParams.vbrSensitivity      = 0;
++    }
++    encPrm.inQueParams.prevLinkId   = ipcInVideoId;
++    encPrm.inQueParams.prevLinkQueId= 0;
++    encPrm.outQueParams.nextLink    = gVdecModuleContext.decId;
++    encPrm.numBufPerCh[0]           = 0;
++
++    for (i=0; i<2; i++) {
++        decPrm.chCreateParams[i].format                               = IVIDEO_H264HP;
++        decPrm.chCreateParams[i].profile                              = IH264VDEC_PROFILE_ANY;
++        decPrm.chCreateParams[i].targetMaxWidth                       = 1280;
++        decPrm.chCreateParams[i].targetMaxHeight                      = 720;
++        decPrm.chCreateParams[i].fieldMergeDecodeEnable               = FALSE;
++        decPrm.chCreateParams[i].tilerEnable                          = FALSE;
++        decPrm.chCreateParams[i].defaultDynamicParams.targetFrameRate = 60;
++        decPrm.chCreateParams[i].defaultDynamicParams.targetBitRate   = 4000*1000;
++        decPrm.chCreateParams[i].numBufPerCh                          = 0;
++    }
++    decPrm.inQueParams.prevLinkId    = gVencModuleContext.encId;
++    decPrm.inQueParams.prevLinkQueId = 0;
++    decPrm.outQueParams.nextLink     = ipcOutVideoId;
++
++    ipcOutVideoPrm.inQueParams.prevLinkId    = gVdecModuleContext.decId;
++    ipcOutVideoPrm.inQueParams.prevLinkQueId = 0;
++    ipcOutVideoPrm.numOutQue                 = 1;
++    ipcOutVideoPrm.outQueParams[0].nextLink  = ipcInVpssId;
++    ipcOutVideoPrm.notifyNextLink            = TRUE;
++    ipcOutVideoPrm.notifyPrevLink            = FALSE;
++    ipcOutVideoPrm.noNotifyMode              = FALSE;
++    ipcOutVideoPrm.numChPerOutQue[0]         = 0;
++    ipcOutVideoPrm.equallyDivideChAcrossOutQues = FALSE;
++
++    ipcInVpssPrm.inQueParams.prevLinkId    = ipcOutVideoId;
++    ipcInVpssPrm.inQueParams.prevLinkQueId = 0;
++    ipcInVpssPrm.numOutQue                 = 1;
++    ipcInVpssPrm.outQueParams[0].nextLink  = selId;
++    ipcInVpssPrm.notifyNextLink            = TRUE;
++    ipcInVpssPrm.notifyPrevLink            = FALSE;
++    ipcInVpssPrm.noNotifyMode              = FALSE;
++    ipcInVpssPrm.numChPerOutQue[0]         = 0;
++    ipcInVpssPrm.equallyDivideChAcrossOutQues = FALSE;
++
++    selPrm.inQueParams.prevLinkId       = ipcInVpssId;
++    selPrm.inQueParams.prevLinkQueId    = 0;
++    selPrm.numOutQue                    = 2;
++    selPrm.outQueParams[0].nextLink     = gVdisModuleContext.swMsId[0];
++    selPrm.outQueChInfo[0].outQueId     = 0;
++    selPrm.outQueChInfo[0].numOutCh     = 1;
++    selPrm.outQueChInfo[0].inChNum[0]   = 0;
++    selPrm.outQueParams[1].nextLink     = gVdisModuleContext.swMsId[1];
++    selPrm.outQueChInfo[1].outQueId     = 1;
++    selPrm.outQueChInfo[1].numOutCh     = 1;
++    selPrm.outQueChInfo[1].inChNum[0]   = 1;
++
++    for (i=0; i<2; i++) {
++        swMsPrm[i].numSwMsInst                     = 1;
++        swMsPrm[i].swMsInstId[0]                   = SYSTEM_SW_MS_SC_INST_DEIHQ_SC_NO_DEI;
++        swMsPrm[i].inQueParams.prevLinkId          = selId;
++        swMsPrm[i].inQueParams.prevLinkQueId       = i;
++        swMsPrm[i].outQueParams.nextLink           = gVdisModuleContext.displayId[i];
++        swMsPrm[i].outDataFormat                   = SYSTEM_DF_YUV422I_YUYV;
++        swMsPrm[i].layoutPrm.outputFPS             = 60;
++        swMsPrm[i].maxInputQueLen                  = SYSTEM_SW_MS_DEFAULT_INPUT_QUE_LEN;
++        swMsPrm[i].maxOutRes                       = SYSTEM_STD_720P_60;
++        swMsPrm[i].initOutRes                      = SYSTEM_STD_720P_60;
++        swMsPrm[i].numOutBuf                       = 0;
++        swMsPrm[i].enableProcessTieWithDisplay     = TRUE;
++        swMsPrm[i].enableOuputDup                  = TRUE;
++        swMsPrm[i].lineSkipMode                    = FALSE;
++        swMsPrm[i].enableLayoutGridDraw            = FALSE;
++        MultiCh_swMsGetDefaultLayoutPrm(0, &swMsPrm[i],FALSE);
++
++        displayPrm[i].displayRes                   = SYSTEM_STD_720P_60;
++        displayPrm[i].numInputQueues               = 1;
++        displayPrm[i].activeQueue                  = 0;
++        displayPrm[i].inQueParams[0].prevLinkId    = gVdisModuleContext.swMsId[i];
++        displayPrm[i].inQueParams[0].prevLinkQueId = 0;
++        displayPrm[i].forceFieldSeparatedInputMode = FALSE;
++        displayPrm[i].maxDriverQueLength           = DISPLAY_LINK_MAX_DRIVER_QUEUE_LENGTH_DEFAULT;
++        displayPrm[i].displayId                    = DISPLAY_LINK_DISPLAY_AUTO_SELECT;
++    }
++ 
++    System_linkCreate(gVcapModuleContext.captureId, &capturePrm, sizeof(capturePrm));
++    System_linkCreate(gVcapModuleContext.nsfId[0], &nsfPrm, sizeof(nsfPrm));
++    System_linkCreate(ipcOutVpssId, &ipcOutVpssPrm, sizeof(ipcOutVpssPrm));
++    System_linkCreate(ipcInVideoId, &ipcInVideoPrm, sizeof(ipcInVideoPrm));
++    System_linkCreate(gVencModuleContext.encId, &encPrm, sizeof(encPrm));
++    System_linkCreate(gVdecModuleContext.decId, &decPrm, sizeof(decPrm));
++    System_linkCreate(ipcOutVideoId, &ipcOutVideoPrm, sizeof(ipcOutVideoPrm));
++    System_linkCreate(ipcInVpssId, &ipcInVpssPrm, sizeof(ipcInVpssPrm));
++    System_linkCreate(selId, &selPrm, sizeof(selPrm));
++    for (i=0; i<2; i++) {
++        System_linkCreate(gVdisModuleContext.swMsId[i], &swMsPrm[i], sizeof(swMsPrm[i]));
++        System_linkCreate(gVdisModuleContext.displayId[i], &displayPrm[i], sizeof(displayPrm[i]));
++    }
++
++    MultiCh_memPrintHeapStatus();
++
++    for (i=0; i<2; i++) {
++        System_linkStart(gVdisModuleContext.displayId[i]);
++        System_linkStart(gVdisModuleContext.swMsId[i]);
++    }
++        System_linkStart(gVdecModuleContext.decId);
++        System_linkStart(gVencModuleContext.encId);
++        System_linkStart(gVcapModuleContext.nsfId[0]);
++        System_linkStart(gVcapModuleContext.captureId);
++}
+diff --git a/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/lusim/multich_doubleChCapSwmsDis.c b/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/lusim/multich_doubleChCapSwmsDis.c
+new file mode 100755
+index 0000000..a6d2341
+--- /dev/null
++++ b/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/lusim/multich_doubleChCapSwmsDis.c
+@@ -0,0 +1,96 @@
++/*******************************************************************************
++ *                                                                             *
++ * Copyright (c) 2009 Texas Instruments Incorporated - http://www.ti.com/      *
++ *                        ALL RIGHTS RESERVED                                  *
++ *                                                                             *
++ ******************************************************************************/
++
++#include "mcfw/src_linux/mcfw_api/usecases/multich_common.h"
++
++Void MultiCh_doubleChCapSwmsDis()
++{
++    Int32 i;
++    Int32 vipInstId;
++    CaptureLink_CreateParams    capturePrm;
++    CaptureLink_VipInstParams   *pCaptureInstPrm;
++    CaptureLink_OutParams       *pCaptureOutPrm;
++    SwMsLink_CreateParams       swMsPrm[VDIS_DEV_MAX];
++    DisplayLink_CreateParams    displayPrm[VDIS_DEV_MAX];
++
++    for (i=0; i<VDIS_DEV_MAX; i++) {
++        MULTICH_INIT_STRUCT(DisplayLink_CreateParams,displayPrm[i]);
++    }
++    gVcapModuleContext.captureId     = SYSTEM_LINK_ID_CAPTURE;
++    gVdisModuleContext.swMsId[0]     = SYSTEM_LINK_ID_SW_MS_MULTI_INST_0;
++    gVdisModuleContext.swMsId[1]     = SYSTEM_LINK_ID_SW_MS_MULTI_INST_1;
++    gVdisModuleContext.displayId[0]  = SYSTEM_LINK_ID_DISPLAY_0;
++    gVdisModuleContext.displayId[1]  = SYSTEM_LINK_ID_DISPLAY_1;
++
++    CaptureLink_CreateParams_Init(&capturePrm);
++    capturePrm.numVipInst               = 2;
++    capturePrm.tilerEnable              = FALSE;
++    capturePrm.numBufsPerCh             = 16;
++    capturePrm.numExtraBufs             = 0;
++    capturePrm.maxBlindAreasPerCh       = 0;
++    capturePrm.isPalMode                = FALSE;
++    capturePrm.enableSdCrop             = FALSE;
++    capturePrm.doCropInCapture          = FALSE;
++
++    for(i=0; i<capturePrm.numVipInst; i++)
++    {
++        vipInstId = SYSTEM_CAPTURE_INST_VIP0_PORTA + 2*i;
++        pCaptureInstPrm                     = &capturePrm.vipInst[i];
++        pCaptureInstPrm->vipInstId          = vipInstId%SYSTEM_CAPTURE_INST_MAX;
++        pCaptureInstPrm->videoDecoderId     = 0;
++        pCaptureInstPrm->inDataFormat       = SYSTEM_DF_YUV422P;
++        pCaptureInstPrm->standard           = gVcapModuleContext.vcapConfig.deviceParams[vipInstId].standard;
++        pCaptureInstPrm->inScanFormat       = gVcapModuleContext.vcapConfig.deviceParams[vipInstId].inScanFormat;
++        pCaptureInstPrm->numOutput          = 1;
++        pCaptureInstPrm->numChPerOutput     = 1;
++
++        pCaptureOutPrm                      = &pCaptureInstPrm->outParams[0];
++        pCaptureOutPrm->dataFormat          = SYSTEM_DF_YUV422I_YUYV;
++        pCaptureOutPrm->scEnable            = FALSE;
++        pCaptureOutPrm->outQueId            = i;
++    }
++    capturePrm.outQueParams[0].nextLink     = gVdisModuleContext.swMsId[0];
++    capturePrm.outQueParams[1].nextLink     = gVdisModuleContext.swMsId[1];
++    System_linkCreate(gVcapModuleContext.captureId, &capturePrm, sizeof(capturePrm));
++    
++    for (i=0; i<2; i++) {
++        swMsPrm[i].numSwMsInst                     = 1;
++        swMsPrm[i].swMsInstId[0]                   = SYSTEM_SW_MS_SC_INST_DEIHQ_SC_NO_DEI;
++        swMsPrm[i].inQueParams.prevLinkId          = gVcapModuleContext.captureId;
++        swMsPrm[i].inQueParams.prevLinkQueId       = i;
++        swMsPrm[i].outQueParams.nextLink           = gVdisModuleContext.displayId[i];
++        swMsPrm[i].outDataFormat                   = SYSTEM_DF_YUV422I_YUYV;
++        swMsPrm[i].layoutPrm.outputFPS             = 30;
++        swMsPrm[i].maxInputQueLen                  = SYSTEM_SW_MS_DEFAULT_INPUT_QUE_LEN;
++        swMsPrm[i].maxOutRes                       = gVdisModuleContext.vdisConfig.deviceParams[i].resolution;
++        swMsPrm[i].initOutRes                      = gVdisModuleContext.vdisConfig.deviceParams[i].resolution;
++        swMsPrm[i].numOutBuf                       = 0;
++        swMsPrm[i].enableProcessTieWithDisplay     = TRUE;
++        swMsPrm[i].enableOuputDup                  = TRUE;
++        swMsPrm[i].lineSkipMode                    = FALSE;
++        swMsPrm[i].enableLayoutGridDraw            = FALSE;
++        MultiCh_swMsGetDefaultLayoutPrm(0, &swMsPrm[i],FALSE);
++
++        displayPrm[i].displayRes                   = gVdisModuleContext.vdisConfig.deviceParams[i].resolution;
++        displayPrm[i].numInputQueues               = 1;
++        displayPrm[i].activeQueue                  = 0;
++        displayPrm[i].inQueParams[0].prevLinkId    = gVdisModuleContext.swMsId[i];
++        displayPrm[i].inQueParams[0].prevLinkQueId = 0;
++        displayPrm[i].forceFieldSeparatedInputMode = FALSE;
++        displayPrm[i].maxDriverQueLength           = DISPLAY_LINK_MAX_DRIVER_QUEUE_LENGTH_DEFAULT;
++        displayPrm[i].displayId                    = DISPLAY_LINK_DISPLAY_AUTO_SELECT;
++    }
++    printf("create\n");
++    for (i=0; i<2; i++) {
++        System_linkCreate(gVdisModuleContext.swMsId[i], &swMsPrm[i], sizeof(swMsPrm[i]));
++        System_linkCreate(gVdisModuleContext.displayId[i], &displayPrm[i], sizeof(displayPrm[i]));
++    }
++    printf("create end\n");
++
++    MultiCh_memPrintHeapStatus();
++}
++
+diff --git a/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/lusim/multich_singleChCapSwmsDis.c b/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/lusim/multich_singleChCapSwmsDis.c
+new file mode 100755
+index 0000000..14fc0a3
+--- /dev/null
++++ b/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/lusim/multich_singleChCapSwmsDis.c
+@@ -0,0 +1,67 @@
++/*******************************************************************************
++ *                                                                             *
++ * Copyright (c) 2009 Texas Instruments Incorporated - http://www.ti.com/      *
++ *                        ALL RIGHTS RESERVED                                  *
++ *                                                                             *
++ ******************************************************************************/
++
++#include "mcfw/src_linux/mcfw_api/usecases/multich_common.h"
++
++Void MultiCh_singleChCapSwmsDis()
++{
++    Int32 vipInstId;
++    CaptureLink_CreateParams    capturePrm;
++    CaptureLink_VipInstParams   *pCaptureInstPrm;
++    CaptureLink_OutParams       *pCaptureOutPrm;
++    DisplayLink_CreateParams    displayPrm;
++    VCAP_PARAMS_S               *vcapConfig;
++    VDIS_PARAMS_S               *vdisConfig;
++
++    MULTICH_INIT_STRUCT(DisplayLink_CreateParams,displayPrm);
++    gVcapModuleContext.captureId     = SYSTEM_LINK_ID_CAPTURE;
++    gVdisModuleContext.displayId[0]  = SYSTEM_LINK_ID_DISPLAY_0;
++
++    CaptureLink_CreateParams_Init(&capturePrm);
++    capturePrm.numVipInst               = 1;
++    capturePrm.tilerEnable              = FALSE;
++    capturePrm.numBufsPerCh             = 16;
++    capturePrm.numExtraBufs             = 0;
++    capturePrm.maxBlindAreasPerCh       = 0;
++    capturePrm.isPalMode                = FALSE;
++    capturePrm.enableSdCrop             = FALSE;
++    capturePrm.doCropInCapture          = FALSE;
++
++    vipInstId   = SYSTEM_CAPTURE_INST_VIP0_PORTA;
++    vcapConfig  = &gVcapModuleContext.vcapConfig;
++    pCaptureInstPrm                     = &capturePrm.vipInst[0];
++    pCaptureInstPrm->vipInstId          = vipInstId%SYSTEM_CAPTURE_INST_MAX;
++    pCaptureInstPrm->videoDecoderId     = 0;
++    pCaptureInstPrm->videoCaptureMode   = vcapConfig->deviceParams[vipInstId].videoCaptureMode;
++    pCaptureInstPrm->videoIfMode        = vcapConfig->deviceParams[vipInstId].videoIfMode;
++    pCaptureInstPrm->inDataFormat       = vcapConfig->deviceParams[vipInstId].inDataFormat;
++    pCaptureInstPrm->standard           = vcapConfig->deviceParams[vipInstId].standard;
++    pCaptureInstPrm->inScanFormat       = vcapConfig->deviceParams[vipInstId].inScanFormat;
++    pCaptureInstPrm->numOutput          = 1;
++    pCaptureInstPrm->numChPerOutput     = 1;
++    pCaptureOutPrm                      = &pCaptureInstPrm->outParams[0];
++    pCaptureOutPrm->dataFormat          = SYSTEM_DF_YUV422I_YUYV;
++    pCaptureOutPrm->scEnable            = FALSE;
++    pCaptureOutPrm->outQueId            = 0;
++    capturePrm.outQueParams[0].nextLink = gVdisModuleContext.displayId[0];
++    
++    vdisConfig = &gVdisModuleContext.vdisConfig;
++    displayPrm.displayRes                   = vdisConfig->deviceParams[VDIS_DEV_HDMI].resolution;
++    displayPrm.numInputQueues               = 1;
++    displayPrm.activeQueue                  = 0;
++    displayPrm.inQueParams[0].prevLinkId    = gVcapModuleContext.captureId;
++    displayPrm.inQueParams[0].prevLinkQueId = 0;
++    displayPrm.forceFieldSeparatedInputMode = FALSE;
++    displayPrm.maxDriverQueLength           = DISPLAY_LINK_MAX_DRIVER_QUEUE_LENGTH_DEFAULT;
++    displayPrm.displayId                    = DISPLAY_LINK_DISPLAY_AUTO_SELECT;
++    
++    System_linkCreate(gVcapModuleContext.captureId, &capturePrm, sizeof(capturePrm));
++    System_linkCreate(gVdisModuleContext.displayId[0], &displayPrm, sizeof(displayPrm));
++
++    MultiCh_memPrintHeapStatus();
++}
++
+diff --git a/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/ti810x/multich_progressive_4d1_vcap_venc_vdec_vdis.c b/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/ti810x/multich_progressive_4d1_vcap_venc_vdec_vdis.c
+index efa8522..f6de2c4 100755
+--- a/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/ti810x/multich_progressive_4d1_vcap_venc_vdec_vdis.c
++++ b/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/ti810x/multich_progressive_4d1_vcap_venc_vdec_vdis.c
+@@ -707,7 +707,7 @@ Void MultiCh_createProgressive4D1VcapVencVdecVdis()
+             pLinkChPrm->rateControlPreset       = pChPrm->rcType;
+             pLinkChPrm->enableSVCExtensionFlag  = pChPrm->enableSVCExtensionFlag;
+             /* Assign pChPrm->numTemporalLayer for enbling SVC-T feature */
+-            pLinkChPrm->numTemporalLayer        = VENC_TEMPORAL_LAYERS_1;
++            pLinkChPrm->numTemporalLayer        = pChPrm->numTemporalLayer;
+ 
+             pLinkDynPrm->intraFrameInterval     = pDynPrm->intraFrameInterval;
+             pLinkDynPrm->targetBitRate          = pDynPrm->targetBitRate;
+@@ -744,7 +744,7 @@ Void MultiCh_createProgressive4D1VcapVencVdecVdis()
+             pLinkChPrm->rateControlPreset       = pChPrm->rcType;
+             pLinkChPrm->enableSVCExtensionFlag  = pChPrm->enableSVCExtensionFlag;
+ 
+-            pLinkChPrm->numTemporalLayer        = VENC_TEMPORAL_LAYERS_1;
++            pLinkChPrm->numTemporalLayer        = pChPrm->numTemporalLayer;
+ 
+             pLinkDynPrm->intraFrameInterval     = pDynPrm->intraFrameInterval;
+             pLinkDynPrm->targetBitRate          = pDynPrm->targetBitRate;
+diff --git a/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/ti816x/multich_hd_sdi_dvr.c b/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/ti816x/multich_hd_sdi_dvr.c
+index a273fcd..921ed99 100755
+--- a/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/ti816x/multich_hd_sdi_dvr.c
++++ b/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/ti816x/multich_hd_sdi_dvr.c
+@@ -1890,6 +1890,10 @@ Void MultiCh_createHDSDIDVR()
+     multich_hdsdidvr_connect_links();
+     multich_hdsdidvr_set_links_framerate();
+     multich_hdsdidvr_set_dec2disp_chmap();
++    Vdis_getMosaicParams(VDIS_DEV_HDMI,&gHDSDIDVRUsecaseContext.vdisMosaicPrms[VDIS_DEV_HDMI]);
++    Vdis_getMosaicParams(VDIS_DEV_DVO2,&gHDSDIDVRUsecaseContext.vdisMosaicPrms[VDIS_DEV_DVO2]);
++    Vdis_setMosaicParams(VDIS_DEV_HDMI,&gHDSDIDVRUsecaseContext.vdisMosaicPrms[VDIS_DEV_HDMI]);
++    Vdis_setMosaicParams(VDIS_DEV_DVO2,&gHDSDIDVRUsecaseContext.vdisMosaicPrms[VDIS_DEV_DVO2]);
+     multich_hdsdidvr_set_encswitchstartch();
+     multich_hdsdidvr_select_all_progressive_encode();
+ //    multich_hdsdidvr_select_all_interlaced_encode();
+-- 
+2.7.4
+
