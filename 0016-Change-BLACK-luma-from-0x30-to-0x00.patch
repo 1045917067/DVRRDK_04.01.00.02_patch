@@ -1,0 +1,37 @@
+From ceba136d4a7d62de0036fac84c8e3f852b9a6a47 Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Fri, 10 Jun 2016 18:05:03 +0800
+Subject: [PATCH 16/42] Change BLACK luma from 0x30 to 0x00.
+
+---
+ dvr_rdk/mcfw/src_bios6/utils/src/utils_dma.c | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/dvr_rdk/mcfw/src_bios6/utils/src/utils_dma.c b/dvr_rdk/mcfw/src_bios6/utils/src/utils_dma.c
+index 5d79bf3..9f477d4 100755
+--- a/dvr_rdk/mcfw/src_bios6/utils/src/utils_dma.c
++++ b/dvr_rdk/mcfw/src_bios6/utils/src/utils_dma.c
+@@ -153,7 +153,20 @@ Int32 Utils_dmaInit()
+             );
+     }
+ 
++    /*
++     *  Modified by: zzx.
++     *
++     *  Date       : Apr 22, 2014.
++     *
++     *  Description:
++     *
++     *               To get pure black, we change Y value from 0x30 to 0x00.
++     */
++#if 0
+     Utils_dmaFastFillSetColor(UTILS_DMA_FAST_FILL_COLOR_BLACK, UTILS_DMA_GENERATE_FILL_PATTERN(0x30, 0x80, 0x80));
++#else
++    Utils_dmaFastFillSetColor(UTILS_DMA_FAST_FILL_COLOR_BLACK, UTILS_DMA_GENERATE_FILL_PATTERN(0x00, 0x80, 0x80));
++#endif
+     Utils_dmaFastFillSetColor(UTILS_DMA_FAST_FILL_COLOR_GREY , UTILS_DMA_GENERATE_FILL_PATTERN(0x80, 0x80, 0x80));
+     Utils_dmaFastFillSetColor(UTILS_DMA_FAST_FILL_COLOR_BLUE , UTILS_DMA_GENERATE_FILL_PATTERN(0x68, 0xD5, 0x5A));
+     Utils_dmaFastFillSetColor(UTILS_DMA_FAST_FILL_COLOR_WHITE, UTILS_DMA_GENERATE_FILL_PATTERN(0xFF, 0x80, 0x80));
+-- 
+2.7.4
+
