@@ -1,0 +1,1564 @@
+From 28324133612ca9573201f355a9bc4cda5591eaeb Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Wed, 8 Jun 2016 16:55:31 +0800
+Subject: [PATCH 04/42] Add SII9233A video decoder driver support.
+
+---
+ dvr_rdk/makerules/includes_a8.mk                   |   7 +-
+ dvr_rdk/mcfw/src_linux/MAKEFILE.MK                 |   1 +
+ dvr_rdk/mcfw/src_linux/devices/inc/device.h        |   3 +
+ .../mcfw/src_linux/devices/sii9233a/inc/sii9233a.h |  21 +
+ .../src_linux/devices/sii9233a/src/MAKEFILE.MK     |   8 +
+ .../src_linux/devices/sii9233a/src/sii9233a_api.c  | 175 ++++
+ .../src_linux/devices/sii9233a/src/sii9233a_i2c.c  | 947 +++++++++++++++++++++
+ .../src_linux/devices/sii9233a/src/sii9233a_priv.h | 171 ++++
+ dvr_rdk/mcfw/src_linux/devices/src/devices.c       | 132 +++
+ 9 files changed, 1464 insertions(+), 1 deletion(-)
+ create mode 100755 dvr_rdk/mcfw/src_linux/devices/sii9233a/inc/sii9233a.h
+ create mode 100755 dvr_rdk/mcfw/src_linux/devices/sii9233a/src/MAKEFILE.MK
+ create mode 100755 dvr_rdk/mcfw/src_linux/devices/sii9233a/src/sii9233a_api.c
+ create mode 100755 dvr_rdk/mcfw/src_linux/devices/sii9233a/src/sii9233a_i2c.c
+ create mode 100755 dvr_rdk/mcfw/src_linux/devices/sii9233a/src/sii9233a_priv.h
+
+diff --git a/dvr_rdk/makerules/includes_a8.mk b/dvr_rdk/makerules/includes_a8.mk
+index 6369a1d..cda2aec 100755
+--- a/dvr_rdk/makerules/includes_a8.mk
++++ b/dvr_rdk/makerules/includes_a8.mk
+@@ -5,7 +5,12 @@ INCLUDES_MK = 1
+ 
+ OSA_INC=-I$(dvr_rdk_PATH)/mcfw/src_linux/osa/inc
+ 
+-DEVICES_INC=-I$(dvr_rdk_PATH)/mcfw/src_linux/devices/inc -I$(dvr_rdk_PATH)/mcfw/src_linux/devices/tvp5158/inc -I$(dvr_rdk_PATH)/mcfw/src_linux/devices/sii9022a/inc  -I$(dvr_rdk_PATH)/mcfw/src_linux/devices/thsfilters/inc -I$(dvr_rdk_PATH)/mcfw/src_linux/devices/tw2968/inc
++DEVICES_INC=-I$(dvr_rdk_PATH)/mcfw/src_linux/devices/inc \
++			-I$(dvr_rdk_PATH)/mcfw/src_linux/devices/tvp5158/inc \
++			-I$(dvr_rdk_PATH)/mcfw/src_linux/devices/sii9233a/inc  \
++			-I$(dvr_rdk_PATH)/mcfw/src_linux/devices/sii9022a/inc  \
++			-I$(dvr_rdk_PATH)/mcfw/src_linux/devices/thsfilters/inc \
++			-I$(dvr_rdk_PATH)/mcfw/src_linux/devices/tw2968/inc
+ 
+ OSA_KERMOD_INC=-I$(dvr_rdk_PATH)/mcfw/src_linux/osa_kermod/inc
+ 
+diff --git a/dvr_rdk/mcfw/src_linux/MAKEFILE.MK b/dvr_rdk/mcfw/src_linux/MAKEFILE.MK
+index 41e24e3..58baee7 100755
+--- a/dvr_rdk/mcfw/src_linux/MAKEFILE.MK
++++ b/dvr_rdk/mcfw/src_linux/MAKEFILE.MK
+@@ -58,6 +58,7 @@ osa:
+ 	$(MAKE) -fMAKEFILE.MK -C$(dvr_rdk_PATH)/mcfw/src_linux/devices/src MODULE=dvr_rdk_osa $(TARGET)
+ 	$(MAKE) -fMAKEFILE.MK -C$(dvr_rdk_PATH)/mcfw/src_linux/devices/tvp5158/src MODULE=dvr_rdk_osa $(TARGET)
+ 	$(MAKE) -fMAKEFILE.MK -C$(dvr_rdk_PATH)/mcfw/src_linux/devices/tw2968/src MODULE=dvr_rdk_osa $(TARGET)
++	$(MAKE) -fMAKEFILE.MK -C$(dvr_rdk_PATH)/mcfw/src_linux/devices/sii9233a/src MODULE=dvr_rdk_osa $(TARGET)
+ 	$(MAKE) -fMAKEFILE.MK -C$(dvr_rdk_PATH)/mcfw/src_linux/devices/sii9022a/src MODULE=dvr_rdk_osa $(TARGET)
+ 	$(MAKE) -fMAKEFILE.MK -C$(dvr_rdk_PATH)/mcfw/src_linux/devices/thsfilters/src MODULE=dvr_rdk_osa $(TARGET)
+ 	$(MAKE) -fMAKEFILE.MK -C$(dvr_rdk_PATH)/mcfw/src_linux/devices/ths8200/src MODULE=ths8200_drv $(TARGET)
+diff --git a/dvr_rdk/mcfw/src_linux/devices/inc/device.h b/dvr_rdk/mcfw/src_linux/devices/inc/device.h
+index 043f0a0..f074c46 100755
+--- a/dvr_rdk/mcfw/src_linux/devices/inc/device.h
++++ b/dvr_rdk/mcfw/src_linux/devices/inc/device.h
+@@ -68,6 +68,9 @@
+ /** \brief TW2968 video decoder driver ID used at the time of FVID2_create() */
+ #define DEVICE_VID_DEC_TW2968_DRV       (DEVICE_VID_DEC_DRV_BASE + 0x0003u)
+ 
++/** \brief SII9233A video decoder driver ID used at the time of FVID2_create() */
++#define DEVICE_VID_DEC_SII9233A_DRV       (DEVICE_VID_DEC_DRV_BASE + 0x0004u)
++
+ /** \brief HDMI SII9022a video encoder driver ID used at the time of FVID2_create() */
+ #define DEVICE_VID_ENC_SII9022A_DRV   (DEVICE_VID_ENC_DRV_BASE + 0x0000u)
+ 
+diff --git a/dvr_rdk/mcfw/src_linux/devices/sii9233a/inc/sii9233a.h b/dvr_rdk/mcfw/src_linux/devices/sii9233a/inc/sii9233a.h
+new file mode 100755
+index 0000000..4e9aea5
+--- /dev/null
++++ b/dvr_rdk/mcfw/src_linux/devices/sii9233a/inc/sii9233a.h
+@@ -0,0 +1,21 @@
++/*******************************************************************************
++ *                                                                             *
++ * Copyright (c) 2009 Texas Instruments Incorporated - http://www.ti.com/      *
++ *                        ALL RIGHTS RESERVED                                  *
++ *                                                                             *
++ ******************************************************************************/
++
++#ifndef _DEVICEDRV_SII9233A_H_
++#define _DEVICEDRV_SII9233A_H_
++
++Device_Handle Device_sii9233aCreate(UInt32 drvId,
++                                    UInt32 instanceId,
++                                    Ptr createArgs,
++                                    Ptr createStatusArgs);
++
++Int32 Device_sii9233aDelete(Device_Handle handle, Ptr deleteArgs);
++
++Int32 Device_sii9233aControl(Device_Handle handle,
++                             UInt32 cmd, Ptr cmdArgs, Ptr cmdStatusArgs);
++
++#endif
+diff --git a/dvr_rdk/mcfw/src_linux/devices/sii9233a/src/MAKEFILE.MK b/dvr_rdk/mcfw/src_linux/devices/sii9233a/src/MAKEFILE.MK
+new file mode 100755
+index 0000000..416bb12
+--- /dev/null
++++ b/dvr_rdk/mcfw/src_linux/devices/sii9233a/src/MAKEFILE.MK
+@@ -0,0 +1,8 @@
++
++include $(dvr_rdk_PATH)/makerules/common_header_a8.mk
++
++INCLUDE+= $(OSA_INC) $(SYSLINK_INC) $(MCFW_INC) $(CODEC_INC) $(DEVICES_INC)
++
++include $(dvr_rdk_PATH)/makerules/common_footer_a8.mk
++
++
+diff --git a/dvr_rdk/mcfw/src_linux/devices/sii9233a/src/sii9233a_api.c b/dvr_rdk/mcfw/src_linux/devices/sii9233a/src/sii9233a_api.c
+new file mode 100755
+index 0000000..36e46a2
+--- /dev/null
++++ b/dvr_rdk/mcfw/src_linux/devices/sii9233a/src/sii9233a_api.c
+@@ -0,0 +1,175 @@
++/*******************************************************************************
++ *                                                                             *
++ * Copyright (c) 2009 Texas Instruments Incorporated - http://www.ti.com/      *
++ *                        ALL RIGHTS RESERVED                                  *
++ *                                                                             *
++ ******************************************************************************/
++
++
++#include "ti_media_std.h"
++#include <device.h>
++#include <device_videoDecoder.h>
++#include <sii9233a_priv.h>
++
++/* Global object storing all information related to all
++  SII9233A driver handles */
++
++/* Control API that gets called when Device_control is called
++
++  This API does handle level semaphore locking
++
++  handle - SII9233A driver handle
++  cmd - command
++  cmdArgs - command arguments
++  cmdStatusArgs - command status
++
++  returns error in case of
++  - illegal parameters
++  - I2C command RX/TX error
++*/
++Int32 Device_sii9233aControl (Device_Handle handle,
++                              UInt32 cmd, Ptr cmdArgs, Ptr cmdStatusArgs)
++{
++    Int32 status;
++    Device_Sii9233aObj *pObj = (Device_Sii9233aObj *)handle;
++
++    if ( pObj == NULL )
++        return -1;
++
++    switch ( cmd )
++    {
++        case DEVICE_CMD_START:
++            status = Device_sii9233aStart(pObj);
++            break;
++
++        case DEVICE_CMD_STOP:
++            status = Device_sii9233aStop(pObj);
++            break;
++
++        case IOCTL_DEVICE_VIDEO_DECODER_RESET:
++            status = Device_sii9233aReset(pObj);
++            break;
++        
++        case IOCTL_DEVICE_VIDEO_DECODER_GET_CHIP_ID:
++            status = Device_sii9233aGetChipId(pObj,cmdArgs,cmdStatusArgs);
++            break;
++
++        case IOCTL_DEVICE_VIDEO_DECODER_SET_VIDEO_MODE:
++            status = Device_sii9233aSetVideoMode(pObj, cmdArgs);
++            break;
++
++        case IOCTL_DEVICE_VIDEO_DECODER_GET_VIDEO_STATUS:
++            status = Device_sii9233aGetVideoStatus ( pObj, cmdArgs, cmdStatusArgs);
++            break;
++
++        default:
++            status = -1;
++            break;
++    }
++
++    return status;
++}
++
++/*
++  Create API that gets called when Device_create is called
++
++  This API does not configure the SII9233A is any way.
++
++  This API
++  - validates parameters
++  - allocates driver handle
++  - stores create arguments in its internal data structure.
++
++  Later the create arguments will be used when doing I2C communcation with
++  SII9233A
++
++  drvId - driver ID, must be DEVICE_VID_DEC_SII9233A_DRV
++  instanceId - must be 0
++  createArgs - create arguments
++  createStatusArgs - create status
++  fdmCbParams  - NOT USED, set to NULL
++
++  returns NULL in case of any error
++*/
++Device_Handle Device_sii9233aCreate (UInt8 drvId,UInt8 instId,
++                                     Ptr createArgs,Ptr createStatusArgs)
++{
++    Int32 status;
++    Device_Sii9233aObj *pObj;
++    
++    Device_VideoDecoderCreateParams *vidDecCreateArgs
++        = (Device_VideoDecoderCreateParams *) createArgs;
++
++    Device_VideoDecoderCreateStatus *vidDecCreateStatus
++        = (Device_VideoDecoderCreateStatus *) createStatusArgs;
++
++    if ( vidDecCreateArgs == NULL || vidDecCreateStatus == NULL )
++        return NULL;
++
++    vidDecCreateStatus->retVal = 0;
++
++    if ( vidDecCreateArgs->deviceI2cInstId >= DEVICE_I2C_INST_ID_MAX
++         || vidDecCreateArgs->numDevicesAtPort > DEVICE_SII9233A_DEV_MAX )
++    {
++        vidDecCreateStatus->retVal = -1;
++        return NULL;
++    }
++
++    pObj = (Device_Sii9233aObj *)malloc(sizeof(Device_Sii9233aObj));
++    if ( pObj == NULL )
++    {
++        vidDecCreateStatus->retVal = -1;
++        return NULL;
++    }
++    else {
++        memset(pObj, 0, sizeof(Device_Sii9233aObj));
++        memcpy ( &pObj->createArgs, vidDecCreateArgs,
++                 sizeof (*vidDecCreateArgs));
++
++        status = OSA_i2cOpen(&pObj->i2cHandle, vidDecCreateArgs->deviceI2cInstId + 1);
++
++        OSA_assert(status==0);
++    }
++    
++    status = Device_sii9233aSetSlaveAddress(pObj);
++    if ( status < 0 )
++        return NULL;
++
++    status = Device_sii9233aSetFactoryMode(pObj);
++    if ( status < 0 )
++        return NULL;
++
++    status = Device_sii9233aSetupEDID(pObj);
++    if ( status < 0 )
++        return NULL;
++
++    return pObj;
++}
++
++/*
++  Delete function that is called when Device_delete is called
++
++  This API
++  - free's driver handle object
++
++  handle - driver handle
++  deleteArgs - NOT USED, set to NULL
++
++*/
++Int32 Device_sii9233aDelete (Device_Handle handle, Ptr deleteArgs )
++{
++    Device_Sii9233aObj *pObj = (Device_Sii9233aObj *) handle;
++
++    if ( pObj == NULL )
++        return -1;
++
++    OSA_i2cClose(&pObj->i2cHandle);
++
++    /*
++     * free driver handle object
++     */
++    free(pObj);
++
++    return 0;
++}
++
+diff --git a/dvr_rdk/mcfw/src_linux/devices/sii9233a/src/sii9233a_i2c.c b/dvr_rdk/mcfw/src_linux/devices/sii9233a/src/sii9233a_i2c.c
+new file mode 100755
+index 0000000..a89f436
+--- /dev/null
++++ b/dvr_rdk/mcfw/src_linux/devices/sii9233a/src/sii9233a_i2c.c
+@@ -0,0 +1,947 @@
++#include "ti_media_std.h"
++#include "ti_vsys_common_def.h"
++#include "mcfw/interfaces/link_api/system_const.h"
++#include <device.h>
++#include <device_videoDecoder.h>
++#include <sii9233a_priv.h>
++#include <unistd.h>
++
++/*
++  Enable or Disable output port
++*/
++Int32 Device_sii9233aOutputEnable (Device_Sii9233aObj *pObj, UInt32 enable)
++{
++    Int32 status = 0;
++    UInt8 regAddr[8];
++    UInt8 regValue[8];
++    UInt8 devAddr;
++    UInt32 numRegs;
++    Device_VideoDecoderCreateParams *pCreateArgs;
++
++    pCreateArgs = &pObj->createArgs;
++    devAddr = pCreateArgs->deviceI2cAddr[0] + DEVICE_SII9233A_I2C_PORT1_OFFSET;
++
++    numRegs = 0;
++    regAddr[numRegs] = DEVICE_SII9233A_REG_SYS_PWR_DWN_2;
++    regValue[numRegs] = 0xC3;
++    if ( enable )
++        regValue[numRegs] |= ( 1 << 2 );    /* Enable outputs  */
++    numRegs++;
++
++    regAddr[numRegs] = DEVICE_SII9233A_REG_SYS_PWR_DWN;
++    regValue[numRegs] = 0xAD;   /* Enable all expect outputs  */
++    if ( enable )
++        regValue[numRegs] |= ( 1 << 6 );    /* Enable outputs  */
++    numRegs++;
++        
++    status = OSA_i2cWrite8(&pObj->i2cHandle, devAddr, regAddr, regValue, numRegs);
++    if ( status < 0 )
++        return -1;
++
++    return status;
++}
++
++/*
++  Power-ON All modules
++*/
++Int32 Device_sii9233aPowerDown(Device_Sii9233aObj *pObj, UInt32 powerDown)
++{
++    Int32 status = 0;
++    UInt8 regAddr[8];
++    UInt8 regValue[8];
++    UInt8 devAddr;
++    UInt32 numRegs;
++    Device_VideoDecoderCreateParams *pCreateArgs;
++
++    pCreateArgs = &pObj->createArgs;
++    devAddr = pCreateArgs->deviceI2cAddr[0];
++
++    numRegs = 0;
++    regAddr[numRegs] = DEVICE_SII9233A_REG_SYS_CTRL_1;
++    regValue[numRegs] = 0;
++    numRegs++;
++    
++    status = OSA_i2cRead8 (&pObj->i2cHandle, devAddr, regAddr, regValue, numRegs);
++    if ( status < 0)
++        return -1;
++
++    if ( powerDown )
++        regValue[0] &= 0xfd;  /* power down  */
++    else
++        regValue[0] |= 0x01;  /* normal operation */
++
++    status = OSA_i2cWrite8(&pObj->i2cHandle, devAddr, regAddr, regValue, numRegs);
++    if ( status < 0 )
++        return -1;
++    
++    return status;
++}
++
++/*
++  Select TMDS core
++  Ignore the input
++*/
++Int32 Device_sii9233aSelectTmdsCore(Device_Sii9233aObj *pObj, UInt32 coreId)
++{
++    Int32 status = 0;
++    UInt8 regAddr[8];
++    UInt8 regValue[8];
++    UInt8 devAddr;
++    UInt32 numRegs;
++    Device_VideoDecoderCreateParams *pCreateArgs;
++
++    pCreateArgs = &pObj->createArgs;
++    devAddr = pCreateArgs->deviceI2cAddr[0];
++
++    numRegs = 0;
++
++    regAddr[numRegs] = DEVICE_SII9233A_REG_SYS_SWTCHC;
++    regValue[numRegs] = (0x01 << coreId) << 4;    /* DDC0_EN = 1 */
++    numRegs++;
++    regAddr[numRegs] = DEVICE_SII9233A_REG_SYS_SWTCHC2;
++    regValue[numRegs] = 0x08 | coreId;            /* DDCDLY_EN = 1, HDMI_PORT0 */
++    numRegs++;
++    regAddr[numRegs] = DEVICE_SII9233A_REG_HP_CTRL;
++    regValue[numRegs] = 0x01 << (2 * coreId);     /* HPD0 = 1 */
++    numRegs++;
++
++    status = OSA_i2cWrite8(&pObj->i2cHandle, devAddr, regAddr, regValue, numRegs);
++    if ( status < 0 )
++        return -1;
++
++    return status;
++}
++
++Int32 Device_sii9233aSetSlaveAddress(Device_Sii9233aObj *pObj)
++{
++    Int32 status = 0;
++    UInt8 regAddr[16];
++    UInt8 regValue[16];
++    UInt8 devAddr;
++    UInt32 numRegs;
++    Device_VideoDecoderCreateParams *pCreateArgs;
++    
++    pCreateArgs = &pObj->createArgs;
++    devAddr = pCreateArgs->deviceI2cAddr[0];
++    
++    numRegs = 0;
++    regAddr[numRegs] = DEVICE_SII9233A_REG_SLAVE_ADDRESS_4;
++    regValue[numRegs] = (devAddr + DEVICE_SII9233A_I2C_XVCOLOR_OFFSET) << 1;
++    numRegs++;
++    regAddr[numRegs] = DEVICE_SII9233A_REG_SLAVE_ADDRESS_2;
++    regValue[numRegs] = (devAddr + DEVICE_SII9233A_I2C_CEC_OFFSET) << 1;
++    numRegs++;
++    regAddr[numRegs] = DEVICE_SII9233A_REG_SLAVE_ADDRESS_3;
++    regValue[numRegs] = (devAddr + DEVICE_SII9233A_I2C_EDID_OFFSET) << 1;
++    numRegs++;
++    
++    status = OSA_i2cWrite8(&pObj->i2cHandle, devAddr, regAddr, regValue, numRegs);
++    if ( status < 0 )
++        return -1;
++    
++    return status;
++}
++
++Int32 Device_sii9233aSetFactoryMode (Device_Sii9233aObj *pObj)
++{
++    Int32 status = 0;
++    UInt8 regAddr[16];
++    UInt8 regValue[16];
++    UInt8 devAddr;
++    UInt32 numRegs;
++    Device_VideoDecoderCreateParams *pCreateArgs;
++    
++    pCreateArgs = &pObj->createArgs;
++    devAddr = pCreateArgs->deviceI2cAddr[0];
++    
++    numRegs = 0;
++    regAddr[numRegs] = 0x0e;
++    regValue[numRegs] = 0x40;
++    numRegs++;
++    
++    status = OSA_i2cWrite8(&pObj->i2cHandle, devAddr, regAddr, regValue, numRegs);
++    if ( status < 0 )
++        return -1;
++
++    devAddr = pCreateArgs->deviceI2cAddr[0] + DEVICE_SII9233A_I2C_EDID_OFFSET;
++    numRegs = 0;
++    regAddr[numRegs] = 0xe5;
++    regValue[numRegs] = 0x02;
++    numRegs++;
++    
++    status = OSA_i2cWrite8(&pObj->i2cHandle, devAddr, regAddr, regValue, numRegs);
++    if ( status < 0 )
++        return -1;
++    
++    devAddr = pCreateArgs->deviceI2cAddr[0] + DEVICE_SII9233A_I2C_XVCOLOR_OFFSET;
++    numRegs = 0;
++    regAddr[numRegs] = 0x81;
++    regValue[numRegs] = 0x18;
++    numRegs++;
++    regAddr[numRegs] = 0x87;
++    regValue[numRegs] = 0x43;
++    numRegs++;
++    regAddr[numRegs] = 0x89;
++    regValue[numRegs] = 0x00;
++    numRegs++;
++    regAddr[numRegs] = 0x92;
++    regValue[numRegs] = 0x8a;
++    numRegs++;
++    regAddr[numRegs] = 0x93;
++    regValue[numRegs] = 0xaa;
++    numRegs++;
++    regAddr[numRegs] = 0x94;
++    regValue[numRegs] = 0x1a;
++    numRegs++;
++    regAddr[numRegs] = 0x95;
++    regValue[numRegs] = 0x2a;
++    numRegs++;
++    regAddr[numRegs] = 0xb5;
++    regValue[numRegs] = 0x40;
++    numRegs++;
++    regAddr[numRegs] = 0xbb;
++    regValue[numRegs] = 0x04;
++    numRegs++;
++    
++    status = OSA_i2cWrite8(&pObj->i2cHandle, devAddr, regAddr, regValue, numRegs);
++    if ( status < 0 )
++        return -1;
++
++    return status;
++}
++ 
++Int32 Device_sii9233aSetupEDID(Device_Sii9233aObj *pObj)
++{
++    Int32 status = 0;
++    UInt16 i;
++    UInt8  regAddr[0x101];
++    UInt8  regValue[0x101];
++    UInt8  devAddr;
++    UInt32  numRegs;
++    Device_VideoDecoderCreateParams *pCreateArgs;
++    
++    static UInt8 edid[0x100] = {
++        0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x16, 0x96, 0x68, 0x81, 0x01, 0x00, 0x00, 0x00,
++        0x08, 0x17, 0x01, 0x03, 0x80, 0x10, 0x09, 0x78, 0x2a, 0x60, 0x41, 0xa6, 0x56, 0x4a, 0x9c, 0x25,
++        0x12, 0x50, 0x54, 0x21, 0x08, 0x00, 0xd1, 0x00, 0xa9, 0x40, 0x81, 0x80, 0x81, 0x40, 0x81, 0x00,
++        0x95, 0x00, 0xb3, 0x00, 0x01, 0x01, 0x02, 0x3a, 0x80, 0x18, 0x71, 0x38, 0x2d, 0x40, 0x58, 0x2c,
++        0x45, 0x00, 0xa0, 0x5a, 0x00, 0x00, 0x00, 0x1e, 0x01, 0x1d, 0x00, 0x72, 0x51, 0xd0, 0x1e, 0x20,
++        0x6e, 0x28, 0x55, 0x00, 0xa0, 0x5a, 0x00, 0x00, 0x00, 0x1e, 0x00, 0x00, 0x00, 0xfd, 0x00, 0x14,
++        0x3c, 0x14, 0x51, 0x14, 0x00, 0x0a, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x00, 0x00, 0x00, 0xfc,
++        0x00, 0x45, 0x54, 0x56, 0x42, 0x4f, 0x41, 0x52, 0x44, 0x0a, 0x20, 0x20, 0x20, 0x20, 0x01, 0x19,
++        0x02, 0x03, 0x29, 0xf1, 0x4d, 0x10, 0x1f, 0x22, 0x21, 0x20, 0x05, 0x14, 0x04, 0x13, 0x12, 0x16,
++        0x03, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xa0
++    };
++
++    pCreateArgs = &pObj->createArgs;
++    devAddr = pCreateArgs->deviceI2cAddr[0] + DEVICE_SII9233A_I2C_EDID_OFFSET;
++
++    numRegs = 0;
++    regAddr[numRegs] = DEVICE_SII9233A_EDID_ENABLE;
++    regValue[numRegs] = 0x01;
++    numRegs++;
++
++    status = OSA_i2cWrite8(&pObj->i2cHandle, devAddr, regAddr, regValue, numRegs);
++    if ( status < 0 )
++        return -1;
++    
++    numRegs = 0;
++    regAddr[numRegs] = DEVICE_SII9233A_EDID_FIFO_SELECT;
++    regValue[numRegs] = 0x01;
++    numRegs++;
++
++    status = OSA_i2cWrite8(&pObj->i2cHandle, devAddr, regAddr, regValue, numRegs);
++    if ( status < 0 )
++        return -1;
++
++    numRegs = 0;
++    regAddr[numRegs] = DEVICE_SII9233A_EDID_FIFO_ADDR;
++    regValue[numRegs] = 0x00;
++    numRegs++;
++
++    status = OSA_i2cWrite8(&pObj->i2cHandle, devAddr, regAddr, regValue, numRegs);
++    if ( status < 0 )
++        return -1;
++    
++    numRegs = 0;
++    regValue[numRegs] = DEVICE_SII9233A_EDID_FIFO_DATA;
++    numRegs++;
++    for (i=0; i<0x100; i++) {
++        regValue[numRegs] = edid[i];
++        numRegs++;
++    }
++
++    status = OSA_i2cRawWrite8(&pObj->i2cHandle, devAddr, regValue, numRegs);
++    if ( status < 0 )
++        return -1;
++
++    return status;
++}
++
++/*
++  Start output port
++*/
++Int32 Device_sii9233aStart(Device_Sii9233aObj *pObj)
++{
++    Int32 status = 0;
++    
++    status = Device_sii9233aOutputEnable(pObj,TRUE);
++    return status;
++}
++
++/*
++  Stop output port
++*/
++Int32 Device_sii9233aStop(Device_Sii9233aObj *pObj)
++{
++    Int32 status = 0;
++
++    status = Device_sii9233aOutputEnable(pObj,FALSE);
++
++    return status;
++}
++
++/*
++  This API
++  - Disable output
++  - Power-ON of all module
++  - Manual reset of SII9233A and then setup in auto reset mode
++  - Select default TMDS core
++*/
++Int32 Device_sii9233aReset(Device_Sii9233aObj *pObj)
++{
++    Int32 status = 0;
++    UInt8 regAddr[8];
++    UInt8 regValue[8];
++    UInt8 devAddr;
++    UInt32 numRegs;
++    Device_VideoDecoderCreateParams *pCreateArgs;
++
++    pCreateArgs = &pObj->createArgs;
++    devAddr = pCreateArgs->deviceI2cAddr[0];
++    
++    /*
++     * disable outputs
++     */
++    status = Device_sii9233aStop(pObj);
++    if ( status < 0 )
++        return status;
++
++    /*
++     * Normal operation
++     */
++    status = Device_sii9233aPowerDown(pObj,FALSE);
++    if ( status < 0 )
++        return status;
++
++    numRegs = 0;
++    regAddr[numRegs] = DEVICE_SII9233A_REG_SW_RST_0;
++    regValue[numRegs] = 0x2F;   /* reset AAC, HDCP, ACR, audio FIFO, SW */
++    numRegs++;
++
++    status = OSA_i2cWrite8(&pObj->i2cHandle, devAddr, regAddr, regValue, numRegs);
++    if ( status < 0 )
++        return -1;
++
++    /*
++     * wait for reset to be effective
++     */
++    usleep( 50000 );
++
++    /*
++     * remove reset and setup in auto-reset mode
++     */
++    numRegs = 0;
++    regAddr[numRegs] = DEVICE_SII9233A_REG_SW_RST_0;
++    regValue[numRegs] = 0x10;   /* auto-reset SW */
++    numRegs++;
++    
++    status = OSA_i2cWrite8(&pObj->i2cHandle, devAddr, regAddr, regValue, numRegs);
++    if ( status < 0 )
++        return -1;
++    
++    /*
++     * select TDMS core
++     */
++    status = Device_sii9233aSelectTmdsCore(pObj,DEVICE_SII9233A_CORE_ID_DEFAULT);
++    if ( status < 0 )
++        return status;
++
++    return status;
++}
++
++/*
++  Get Chip ID and revision ID
++*/
++Int32 Device_sii9233aGetChipId(Device_Sii9233aObj *pObj,
++                               Device_VideoDecoderChipIdParams *pPrm,
++                               Device_VideoDecoderChipIdStatus *pStatus)
++{
++    Int32 status = 0;
++    UInt8 regAddr[8];
++    UInt8 regValue[8];
++    UInt8 devAddr;
++    UInt32 numRegs;
++    Device_VideoDecoderCreateParams *pCreateArgs;
++
++    if ( pStatus == NULL || pPrm == NULL )
++        return -1;
++
++    memset ( pStatus, 0, sizeof ( *pStatus ) );
++
++    pCreateArgs = &pObj->createArgs;
++    devAddr = pCreateArgs->deviceI2cAddr[0];
++
++    if ( pPrm->deviceNum >= pCreateArgs->numDevicesAtPort )
++        return -1;
++
++    numRegs = 0;
++    regAddr[numRegs] = DEVICE_SII9233A_REG_VND_IDL;
++    regValue[numRegs] = 0;
++    numRegs++;
++
++    regAddr[numRegs] = DEVICE_SII9233A_REG_VND_IDH;
++    regValue[numRegs] = 0;
++    numRegs++;
++
++    regAddr[numRegs] = DEVICE_SII9233A_REG_DEV_IDL;
++    regValue[numRegs] = 0;
++    numRegs++;
++
++    regAddr[numRegs] = DEVICE_SII9233A_REG_DEV_IDH;
++    regValue[numRegs] = 0;
++    numRegs++;
++
++    regAddr[numRegs] = DEVICE_SII9233A_REG_DEV_REV;
++    regValue[numRegs] = 0;
++    numRegs++;
++
++    status = OSA_i2cRead8 (&pObj->i2cHandle, devAddr, regAddr, regValue, numRegs);
++    if ( status < 0)
++        return -1;
++
++    pStatus->chipId = ( ( UInt32 ) regValue[3] << 8 ) | regValue[2];
++    pStatus->chipRevision = regValue[4];
++    pStatus->firmwareVersion = ( ( UInt32 ) regValue[1] << 8 ) | regValue[0];
++
++    return status;
++}
++
++/*
++  Read AVI packet info and parse information from it
++
++  pAviInfo - parsed information returned by this API
++*/
++Int32 Device_sii9233aReadAviInfo(Device_Sii9233aObj *pObj,
++                                 Device_Sii9233aAviInfoFrame *pAviInfo)
++{
++    Int32 status = 0;
++    UInt8 regAddr[32];
++    UInt8 regValue[32];
++    UInt8 devAddr;
++    UInt8 aviAddr;
++    UInt8 *aviData;
++    UInt32 numRegs;
++    Device_VideoDecoderCreateParams *pCreateArgs;
++
++    /*
++     * read AVI Info Frame
++     */
++    pAviInfo->detected = FALSE;
++    pCreateArgs = &pObj->createArgs;
++    devAddr = pCreateArgs->deviceI2cAddr[0] + DEVICE_SII9233A_I2C_PORT1_OFFSET;
++
++    numRegs = 0;
++
++    for ( aviAddr = DEVICE_SII9233A_REG_AVI_TYPE;
++          aviAddr <= DEVICE_SII9233A_REG_AVI_DBYTE15; aviAddr++ )
++    {
++        regAddr[numRegs] = aviAddr;
++        regValue[numRegs] = 0;
++        numRegs++;
++    }
++
++    status = OSA_i2cRead8 (&pObj->i2cHandle, devAddr, regAddr, regValue, numRegs);
++    if ( status < 0){
++        return -1;
++    }
++
++    if ( regValue[0] == DEVICE_SII9233A_AVI_INFO_PACKET_CODE
++         && regValue[1] == DEVICE_SII9233A_AVI_INFO_VERSION_CODE
++         && regValue[2] == DEVICE_SII9233A_AVI_INFO_PACKET_LENGTH )
++    {
++        /*
++         * Valid AVI packet recevied
++         */
++
++        status = 0;
++        pAviInfo->detected = TRUE;
++
++        aviData = &regValue[3]; /* point to start of AVI data checksum */
++
++        /*
++         * parse information
++         */
++        pAviInfo->colorSpace = ( ( aviData[1] >> 5 ) & 0x3 );
++        pAviInfo->colorImetric = ( ( aviData[2] >> 6 ) & 0x3 );
++        pAviInfo->pixelRepeat = ( ( aviData[5] >> 0 ) & 0xF );
++    }
++
++    return status;
++}
++
++/*
++  Get and detect video status
++*/
++Int32 Device_sii9233aGetVideoStatus(Device_Sii9233aObj *pObj,
++                                    VCAP_VIDEO_SOURCE_STATUS_PARAMS_S *pPrm,
++                                    VCAP_VIDEO_SOURCE_CH_STATUS_S *pStatus)
++{
++    Int32 status = 0;
++    UInt8 regAddr[16];
++    UInt8 regValue[16];
++    UInt8 devAddr;
++    UInt32 numRegs;
++    UInt32 hRes, vRes, dePix, deLin, xclkInPclk;
++    UInt32 sysStat, vidStat;
++    UInt32 t_line;
++    Device_VideoDecoderCreateParams *pCreateArgs;
++    
++    if ( pStatus == NULL || pPrm == NULL )
++        return -1;
++
++    memset ( pStatus, 0, sizeof ( *pStatus ) );
++
++    pCreateArgs = &pObj->createArgs;
++    devAddr = pCreateArgs->deviceI2cAddr[0];
++
++    // stop count
++    numRegs = 0;
++    regAddr[numRegs] = DEVICE_SII9233A_REG_VID_XPM_EN;
++    regValue[numRegs] = 0x00;
++    numRegs++;
++
++    status = OSA_i2cWrite8(&pObj->i2cHandle, devAddr, regAddr, regValue, numRegs);
++    if ( status < 0 )
++        return -1;
++    
++    numRegs = 0;
++
++    regAddr[numRegs] = DEVICE_SII9233A_REG_H_RESL;
++    regValue[numRegs] = 0;
++    numRegs++;
++
++    regAddr[numRegs] = DEVICE_SII9233A_REG_H_RESH;
++    regValue[numRegs] = 0;
++    numRegs++;
++
++    regAddr[numRegs] = DEVICE_SII9233A_REG_V_RESL;
++    regValue[numRegs] = 0;
++    numRegs++;
++
++    regAddr[numRegs] = DEVICE_SII9233A_REG_V_RESH;
++    regValue[numRegs] = 0;
++    numRegs++;
++
++    regAddr[numRegs] = DEVICE_SII9233A_REG_DE_PIXL;
++    regValue[numRegs] = 0;
++    numRegs++;
++
++    regAddr[numRegs] = DEVICE_SII9233A_REG_DE_PIXH;
++    regValue[numRegs] = 0;
++    numRegs++;
++
++    regAddr[numRegs] = DEVICE_SII9233A_REG_DE_LINL;
++    regValue[numRegs] = 0;
++    numRegs++;
++
++    regAddr[numRegs] = DEVICE_SII9233A_REG_DE_LINH;
++    regValue[numRegs] = 0;
++    numRegs++;
++
++    regAddr[numRegs] = DEVICE_SII9233A_REG_VID_XPCNTL;
++    regValue[numRegs] = 0;
++    numRegs++;
++
++    regAddr[numRegs] = DEVICE_SII9233A_REG_VID_XPCNTH;
++    regValue[numRegs] = 0;
++    numRegs++;
++
++    regAddr[numRegs] = DEVICE_SII9233A_REG_VID_STAT;
++    regValue[numRegs] = 0;
++    numRegs++;
++
++    regAddr[numRegs] = DEVICE_SII9233A_REG_STATE;
++    regValue[numRegs] = 0;
++    numRegs++;
++    
++    status = OSA_i2cRead8(&pObj->i2cHandle, devAddr, regAddr, regValue, numRegs);
++    if ( status < 0)
++        return -1;
++    
++    /*
++     * horizontal resolution
++     */
++    hRes = ( ( UInt32 ) regValue[1] << 8 ) | regValue[0];
++
++    /*
++     * vertical resolution
++     */
++    vRes = ( ( UInt32 ) regValue[3] << 8 ) | regValue[2];
++
++    /*
++     * horizontal active data resolution
++     */
++    dePix = ( ( UInt32 ) regValue[5] << 8 ) | regValue[4];
++
++    /*
++     * vertical active data resolution
++     */
++    deLin = ( ( UInt32 ) regValue[7] << 8 ) | regValue[6];
++
++    /*
++     * number of xclks per 2048 video clocks
++     */
++    xclkInPclk = ( ( UInt32 ) regValue[9] << 8 ) | regValue[8];
++
++    /*
++     * video status
++     */
++    vidStat = regValue[10];
++
++    /*
++     * system status
++     */
++    sysStat = regValue[11];
++
++    if ( sysStat & DEVICE_SII9233A_VID_DETECT )
++    {
++        pStatus->isVideoDetect = TRUE;
++
++        if ( vidStat & DEVICE_SII9233A_VID_INTERLACE )
++        {
++             pStatus->isInterlaced = TRUE;
++        }
++
++        pStatus->frameWidth = dePix;
++        pStatus->frameHeight = deLin;
++
++        /*
++         * time interval in usecs for each line
++         */
++        t_line = ( UInt32 ) ( ( ( UInt32 ) hRes * xclkInPclk * 1000 ) / ( DEVICE_SII9233A_FXTAL_KHZ * 2048 ) ); /* in usecs */
++
++        /*
++         * time interval in usecs for each frame/field
++         */
++        pStatus->frameInterval = t_line * vRes;
++    }
++
++    //enable
++    numRegs = 0;
++    regAddr[numRegs] = DEVICE_SII9233A_REG_VID_XPM_EN;
++    regValue[numRegs] = 0x01;
++    numRegs++;
++
++    status = OSA_i2cWrite8(&pObj->i2cHandle, devAddr, regAddr, regValue, numRegs);
++    if ( status < 0 )
++        return -1;
++
++    return status;
++}
++
++/*
++  Wait until video is detected and the get video properties
++*/
++Int32 Device_sii9233aDetectVideo(Device_Sii9233aObj *pObj,
++                                 Device_Sii9233aAviInfoFrame *pAviInfo,
++                                 UInt32 timeout)
++{
++    Int32 status = 0;
++    VCAP_VIDEO_SOURCE_STATUS_PARAMS_S vidStatusPrm;
++    VCAP_VIDEO_SOURCE_CH_STATUS_S vidStatus;
++    UInt32 loopTimeout, curTimeout = 0;
++
++    timeout = 1000; /* hard code for now */
++    loopTimeout = 250;   /* check video status every 50 OS ticks */
++
++    usleep(100000);
++    vidStatusPrm.channelNum = 0;
++    while ( 1 )
++    {
++        status = Device_sii9233aGetVideoStatus (pObj, &vidStatusPrm, &vidStatus);
++        if ( status < 0)
++            return status;
++
++        if ( vidStatus.isVideoDetect )
++        {
++            break;
++        }
++        usleep ( loopTimeout * 1000);
++
++        if ( timeout != 0xFF )
++        {
++            curTimeout += loopTimeout;
++
++            if ( curTimeout >= timeout )
++            {
++                status = -1;
++                break;
++            }
++        }
++    }
++
++    /*
++     * video detected, read AVI info
++     */
++    status |= Device_sii9233aReadAviInfo ( pObj, pAviInfo );
++
++    return status;
++}
++
++/*
++  Setup video processing path based on detected source
++
++  pAviInfoFrame - input source properties
++  pPrm - user required parameters
++*/
++Int32 Device_sii9233aSetupVideo(Device_Sii9233aObj * pObj,
++                                Device_Sii9233aAviInfoFrame * pAviInfo,
++                                Device_VideoDecoderVideoModeParams * pPrm )
++{
++    Int32 status = 0;
++    UInt8 regAddr[32];
++    UInt8 regValue[32];
++    UInt8 devAddr;
++    UInt32 numRegs;
++    UInt32 insSavEav, cscR2Y, upSmp, downSmp, chMap;
++    UInt32 cscY2R, outColorSpace, isBT709, inPixRep;
++    Device_VideoDecoderCreateParams *pCreateArgs;
++
++    pCreateArgs = &pObj->createArgs;
++
++    devAddr = pCreateArgs->deviceI2cAddr[0];
++
++    outColorSpace = DEVICE_SII9233A_COLOR_FORMAT_YUV;
++    if ( pPrm->videoDataFormat == SYSTEM_DF_RGB24_888 )
++        outColorSpace = DEVICE_SII9233A_COLOR_FORMAT_RGB;
++    // Hard code AVI frame info
++    if ( pAviInfo->detected == FALSE)
++    {
++    	pAviInfo->colorSpace = DEVICE_SII9233A_AVI_INFO_COLOR_RGB444;
++    	pAviInfo->colorImetric = DEVICE_SII9233A_AVI_INFO_CMETRIC_ITU709;
++    	pAviInfo->pixelRepeat = DEVICE_SII9233A_AVI_INFO_PIXREP_NONE;
++
++        if ( pPrm->standard==SYSTEM_STD_480I
++          || pPrm->standard==SYSTEM_STD_576I
++          || pPrm->standard==SYSTEM_STD_D1
++          || pPrm->standard==SYSTEM_STD_NTSC
++          || pPrm->standard==SYSTEM_STD_PAL )
++        {
++            pAviInfo->colorImetric = DEVICE_SII9233A_AVI_INFO_CMETRIC_ITU601;
++            pAviInfo->pixelRepeat = DEVICE_SII9233A_AVI_INFO_PIXREP_2X;
++        }
++    }
++
++    inPixRep = pAviInfo->pixelRepeat;
++    if ( inPixRep > DEVICE_SII9233A_AVI_INFO_PIXREP_4X )
++    {
++        inPixRep = 0;
++        status = -1;
++    }
++    
++    isBT709 = 1;
++    if ( pAviInfo->colorImetric == DEVICE_SII9233A_AVI_INFO_CMETRIC_ITU601 )
++        isBT709 = 0;
++
++    cscR2Y = 0;
++    upSmp = 0;
++    downSmp = 0;
++    cscY2R = 0;
++    insSavEav = 0;
++
++    switch ( pAviInfo->colorSpace )
++    {
++        case DEVICE_SII9233A_AVI_INFO_COLOR_RGB444:
++            switch ( pPrm->videoDataFormat )
++            {
++                case SYSTEM_DF_YUV422P:
++                    cscR2Y = 1;
++                    downSmp = 1;
++                    insSavEav = 1;
++                    break;
++
++                case SYSTEM_DF_YUV444P:
++                    cscR2Y = 1;
++                    break;
++
++                case SYSTEM_DF_RGB24_888:
++                    break;
++
++                default:
++                    status = -1;
++                    break;
++            }
++            break;
++        case DEVICE_SII9233A_AVI_INFO_COLOR_YUV444:
++            switch ( pPrm->videoDataFormat )
++            {
++                case SYSTEM_DF_YUV422P:
++                    downSmp = 1;
++                    insSavEav = 1;
++                    break;
++
++                case SYSTEM_DF_YUV444P:
++                    break;
++
++                case SYSTEM_DF_RGB24_888:
++                    cscY2R = 1;
++                    break;
++
++                default:
++                    status = -1;
++                    break;
++            }
++            break;
++
++        case DEVICE_SII9233A_AVI_INFO_COLOR_YUV422:
++            switch ( pPrm->videoDataFormat )
++            {
++                case SYSTEM_DF_YUV422P:
++                    insSavEav = 1;
++                    break;
++
++                case SYSTEM_DF_YUV444P:
++                    upSmp = 1;
++                    break;
++
++                case SYSTEM_DF_RGB24_888:
++                    upSmp = 1;
++                    cscY2R = 1;
++                    break;
++
++                default:
++                    status = -1;
++                    break;
++            }
++            break;
++
++        default:
++            status = -1;
++            break;
++    }
++    numRegs = 0;
++
++    regAddr[numRegs] = DEVICE_SII9233A_REG_VID_MODE_1;
++    regValue[numRegs] = ( insSavEav << 7 )  /* 1: SAV2EAV enable   , 0: disable */
++        | ( 0 << 6 )    /* 1: Mux Y/C          , 0: No MUX  */
++        | ( 1 << 5 )    /* 1: Dither enable    , 0: disable */
++        | ( 1 << 4 )    /* 1: R2Y compress     , 0: bypass  */
++        | ( cscR2Y << 3 )   /* 1: Enable R2Y CSC   , 0: bypass  */
++        | ( upSmp << 2 )    /* 1: YUV422 to YUV444 , 0: bypass  */
++        | ( downSmp << 1 )  /* 1: YUV444 to YUV422 , 0: bypass  */
++        ;
++    numRegs++;
++
++    regAddr[numRegs] = DEVICE_SII9233A_REG_VID_MODE_2;
++    regValue[numRegs] = ( 0 << 6 )  /* 0: Dither to 8bits, 1: 10bits, 2: 12bits  */
++        | ( 0 << 5 )    /* 0: EVNODD LOW if field 0 is even, 1: HIGH */
++        | ( 1 << 3 )    /* 1: Y2R compress     , 0: bypass           */
++        | ( cscY2R << 2 )   /* 1: Y2R CSC          , 0: bypass           */
++        | ( outColorSpace << 1 )    /* 0: Output format RGB, 1: YUV           */
++        | ( 0 << 0 )    /* 1: Range clip enable, 0: disable          */
++        ;
++    numRegs++;
++
++    regAddr[numRegs] = DEVICE_SII9233A_REG_VID_CTRL;
++    regValue[numRegs] = ( 0 << 7 )  /* 0: Do not invert VSYNC, 1: invert */
++        | ( 0 << 6 )    /* 0: Do not invert HSYNC, 1: invert */
++        | ( isBT709 << 2 )  /* 0: Y2R BT601          , 1: BT709  */
++        | ( 0 << 1 )    /* 0: 8bits RGB or YUV   , 1: YUV422 > 8 bits */
++        | ( isBT709 << 0 )  /* 0: R2Y BT601          , 1: BT709  */
++        ;
++    numRegs++;
++    
++    regAddr[numRegs] = DEVICE_SII9233A_REG_SYS_CTRL_1;
++    regValue[numRegs] = ( inPixRep << 6 )  /* 0: Output pixel clock divided 1x, 1: 1/2x, 3: 1/4x */
++        | ( inPixRep << 4 ) /* 0: Input pixel replicate 1x, 1:2x, 3:4x            */
++        | ( 1 << 2 )    /* 0: 12-bit mode         , 1: 24-bit mode      */
++        | ( 0 << 1 )    /* 0: Normal output clock , 1: Invert clock     */
++        | ( 1 << 0 )    /* 0: Power down          , 1: Normal operation */
++        ;
++    numRegs++;
++
++    /* this is device connected to VIP1 and is connected in
++       16-bit mode */
++    chMap = 0x00;
++
++    /*     Q[23:16]  Q[15:8]  Q[7:0]
++        0:     R        G       B
++        1:     R        B       G
++        2:     G        R       B
++        3:     G        B       R
++        4:     B        R       G
++        5:     B        G       R
++    */
++    regAddr[numRegs] = DEVICE_SII9233A_REG_VID_CH_MAP;
++    regValue[numRegs] = chMap;
++    numRegs++;
++
++    status = OSA_i2cWrite8(&pObj->i2cHandle, devAddr, regAddr, regValue, numRegs);
++    if ( status < 0 )
++        return -1;
++
++    return status;
++}
++ 
++/*
++  For SII9233A below parameters in Device_VideoDecoderVideoModeParams are ignored
++  and any value set by user for these parameters is not effective.
++
++  videoIfMode
++  standard
++  videoCaptureMode
++  videoSystem
++
++  Depending on video data format SII9233A is configured as below
++
++  videoDataFormat =
++   SYSTEM_DF_YUV422P   : 16-bit YUV422 single CH embedded sync auto-detect mode
++   SYSTEM_DF_YUV444P   : 24-bit YUV444 single CH discrete sync auto-detect mode
++   SYSTEM_DF_RGB24_888 : 24-bit RGB24  single CH discrete sync auto-detect mode
++*/
++Int32 Device_sii9233aSetVideoMode(Device_Sii9233aObj *pObj,
++                                  Device_VideoDecoderVideoModeParams *pPrm)
++{
++    Int32 status = 0;
++    Device_Sii9233aAviInfoFrame aviInfo;
++
++    /*
++     * reset device
++     */
++    status = Device_sii9233aReset(pObj);
++    if ( status < 0 )
++        return status;
++
++    /*
++     * detect video source properties
++     */
++    status = Device_sii9233aDetectVideo(pObj,
++                                        &aviInfo, pPrm->videoAutoDetectTimeout);
++    /*
++     * setup video processing path based on detected source
++     */
++    status = Device_sii9233aSetupVideo ( pObj, &aviInfo, pPrm );
++    if ( status < 0 )
++        return status;
++
++    return status;
++}
++
++
+diff --git a/dvr_rdk/mcfw/src_linux/devices/sii9233a/src/sii9233a_priv.h b/dvr_rdk/mcfw/src_linux/devices/sii9233a/src/sii9233a_priv.h
+new file mode 100755
+index 0000000..b8a36b5
+--- /dev/null
++++ b/dvr_rdk/mcfw/src_linux/devices/sii9233a/src/sii9233a_priv.h
+@@ -0,0 +1,171 @@
++/*******************************************************************************
++ *                                                                             *
++ * Copyright (c) 2009 Texas Instruments Incorporated - http://www.ti.com/      *
++ *                        ALL RIGHTS RESERVED                                  *
++ *                                                                             *
++ ******************************************************************************/
++
++#ifndef _DEVICE_SII9233A_PRIV_H_
++#define _DEVICE_SII9233A_PRIV_H_
++
++#include <osa_sem.h>
++#include <osa_i2c.h>
++
++#include "ti_vcap_common_def.h"
++
++
++#define DEVICE_SII9233A_DEV_MAX   (1)
++/* Driver object state - NOT IN USE */
++#define DEVICE_SII9233A_OBJ_STATE_UNUSED   (0)
++
++/* Driver object state - IN USE and IDLE */
++#define DEVICE_SII9233A_OBJ_STATE_IDLE     (1)
++
++/* SII9233A I2C Port0 address is 0x30 or 0x31*/
++/* SII9233A I2C Port1 offset from Port0  */
++#define DEVICE_SII9233A_I2C_PORT1_OFFSET   (4)
++
++/* SII9233A I2C XVCOLOR Port offset from Port0  */
++#define DEVICE_SII9233A_I2C_XVCOLOR_OFFSET (2)
++
++/* SII9233A I2C CEC Port offset from Port0  */
++#define DEVICE_SII9233A_I2C_CEC_OFFSET     (0x30)
++
++/* SII9233A I2C EDID Port offset from Port0  */
++#define DEVICE_SII9233A_I2C_EDID_OFFSET    (0x40)
++
++/* SII9233A Default TMDS Core ID to use  */
++#define DEVICE_SII9233A_CORE_ID_DEFAULT    (0)
++
++/* SII9233A Registers - I2C Port 0 */
++#define DEVICE_SII9233A_REG_VND_IDL         (0x00)
++#define DEVICE_SII9233A_REG_VND_IDH         (0x01)
++#define DEVICE_SII9233A_REG_DEV_IDL         (0x02)
++#define DEVICE_SII9233A_REG_DEV_IDH         (0x03)
++#define DEVICE_SII9233A_REG_DEV_REV         (0x04)
++#define DEVICE_SII9233A_REG_SW_RST_0        (0x05)
++#define DEVICE_SII9233A_REG_STATE           (0x06)
++#define DEVICE_SII9233A_REG_SW_RST_1        (0x07)
++#define DEVICE_SII9233A_REG_SYS_CTRL_1      (0x08)
++#define DEVICE_SII9233A_REG_SYS_SWTCHC      (0x09)
++#define DEVICE_SII9233A_REG_HP_CTRL         (0x10)
++#define DEVICE_SII9233A_REG_SLAVE_ADDRESS_4 (0x15)
++#define DEVICE_SII9233A_REG_SLAVE_ADDRESS_2 (0x18)
++#define DEVICE_SII9233A_REG_SLAVE_ADDRESS_3 (0x19)
++#define DEVICE_SII9233A_REG_SYS_SWTCHC2     (0x0A)
++#define DEVICE_SII9233A_REG_CHIP_SEL        (0x0C)
++#define DEVICE_SII9233A_REG_HDCP_BCAPS_SET  (0x2E)
++#define DEVICE_SII9233A_REG_H_RESL          (0x3A)
++#define DEVICE_SII9233A_REG_H_RESH          (0x3B)
++#define DEVICE_SII9233A_REG_V_RESL          (0x3C)
++#define DEVICE_SII9233A_REG_V_RESH          (0x3D)
++#define DEVICE_SII9233A_REG_VID_CTRL        (0x48)
++#define DEVICE_SII9233A_REG_VID_MODE_2      (0x49)
++#define DEVICE_SII9233A_REG_VID_MODE_1      (0x4A)
++#define DEVICE_SII9233A_REG_VID_BLANK1      (0x4B)
++#define DEVICE_SII9233A_REG_VID_BLANK2      (0x4C)
++#define DEVICE_SII9233A_REG_VID_BLANK3      (0x4D)
++#define DEVICE_SII9233A_REG_DE_PIXL         (0x4E)
++#define DEVICE_SII9233A_REG_DE_PIXH         (0x4F)
++#define DEVICE_SII9233A_REG_DE_LINL         (0x50)
++#define DEVICE_SII9233A_REG_DE_LINH         (0x51)
++#define DEVICE_SII9233A_REG_VID_STAT        (0x55)
++#define DEVICE_SII9233A_REG_VID_CH_MAP      (0x56)
++#define DEVICE_SII9233A_REG_VID_AOF         (0x5F)
++#define DEVICE_SII9233A_REG_VID_XPM_EN      (0x6A)
++#define DEVICE_SII9233A_REG_VID_XPCNTL      (0x6E)
++#define DEVICE_SII9233A_REG_VID_XPCNTH      (0x6F)
++#define DEVICE_SII9233A_REG_AEC0_CTRL       (0xB5)
++#define DEVICE_SII9233A_REG_DS_BSTAT2       (0xD6)
++
++/* SII9233A Registers - I2C Port 1 */
++#define DEVICE_SII9233A_REG_SYS_I2S_CTRL2   (0x27)
++#define DEVICE_SII9233A_REG_SYS_PWR_DWN_2   (0x3E)
++#define DEVICE_SII9233A_REG_SYS_PWR_DWN     (0x3F)
++#define DEVICE_SII9233A_REG_AVI_TYPE        (0x40)
++#define DEVICE_SII9233A_REG_AVI_DBYTE15     (0x52)
++#define DEVICE_SII9233A_REG_AUDP_STAT       (0x34)
++
++#define DEVICE_SII9233A_EDID_ENABLE         (0x01)
++#define DEVICE_SII9233A_EDID_FIFO_ADDR      (0x02)
++#define DEVICE_SII9233A_EDID_FIFO_DATA      (0x03)
++#define DEVICE_SII9233A_EDID_FIFO_SELECT    (0x04)
++
++/* SII9233A Registers values */
++
++/* PCLK stable, Clock detect, Sync Detect */
++#define DEVICE_SII9233A_VID_DETECT          ((1<<0) | (1<<1) | (1<<4))
++
++/* Video interlace status */
++#define DEVICE_SII9233A_VID_INTERLACE       (1<<2)
++
++/* color format */
++#define DEVICE_SII9233A_COLOR_FORMAT_RGB    (0)
++#define DEVICE_SII9233A_COLOR_FORMAT_YUV    (1)
++
++/* F_xtal frequency in Khz  */
++#define DEVICE_SII9233A_FXTAL_KHZ           (27000)
++
++/* HDMI AVI InfoFrame Packet info  */
++
++/* color space  */
++#define DEVICE_SII9233A_AVI_INFO_COLOR_RGB444       (0)
++#define DEVICE_SII9233A_AVI_INFO_COLOR_YUV422       (1)
++#define DEVICE_SII9233A_AVI_INFO_COLOR_YUV444       (2)
++
++/* color imetric  */
++#define DEVICE_SII9233A_AVI_INFO_CMETRIC_NO_DATA    (0)
++#define DEVICE_SII9233A_AVI_INFO_CMETRIC_ITU601     (1)
++#define DEVICE_SII9233A_AVI_INFO_CMETRIC_ITU709     (2)
++
++/* pixel repition */
++#define DEVICE_SII9233A_AVI_INFO_PIXREP_NONE        (0)
++#define DEVICE_SII9233A_AVI_INFO_PIXREP_2X          (1)
++#define DEVICE_SII9233A_AVI_INFO_PIXREP_4X          (3)
++
++/* AVI packet info values */
++#define DEVICE_SII9233A_AVI_INFO_PACKET_CODE        (0x82)
++#define DEVICE_SII9233A_AVI_INFO_VERSION_CODE       (0x02)
++#define DEVICE_SII9233A_AVI_INFO_PACKET_LENGTH      (0x0D)
++
++/*
++  Information that is parsed from HDMI AVIInfoFrame packet
++*/
++typedef struct
++{
++    UInt32 colorSpace;          /* RGB444 ot YUV422 or YUV422 */
++    UInt32 colorImetric;        /* BT709 or BT601 */
++    UInt32 pixelRepeat;         /* 1x, 2x, 4x */
++    UInt32 detected;            /* detected or hard code*/
++
++} Device_Sii9233aAviInfoFrame;
++
++typedef struct
++{
++    Bool   isPalMode;
++    /*palMode to be set based on detect status */
++    Device_VideoDecoderVideoModeParams videoModeParams;
++    /* video mode params */
++    Device_VideoDecoderCreateParams createArgs;
++    /* create time arguments */
++
++    OSA_I2cHndl i2cHandle;
++    /* i2cHandle for i2c read write operations */
++
++} Device_Sii9233aObj;
++
++Int32 Device_sii9233aStart(Device_Sii9233aObj *pObj);
++Int32 Device_sii9233aStop(Device_Sii9233aObj *pObj);
++Int32 Device_sii9233aReset(Device_Sii9233aObj * pObj );
++Int32 Device_sii9233aGetChipId(Device_Sii9233aObj *pObj,
++                               Device_VideoDecoderChipIdParams *pPrm,
++                               Device_VideoDecoderChipIdStatus *pStatus);
++Int32 Device_sii9233aSetVideoMode(Device_Sii9233aObj *pObj,
++                                  Device_VideoDecoderVideoModeParams *pPrm);
++Int32 Device_sii9233aGetVideoStatus(Device_Sii9233aObj *pObj,
++                                    VCAP_VIDEO_SOURCE_STATUS_PARAMS_S *pPrm,
++                                    VCAP_VIDEO_SOURCE_CH_STATUS_S *pStatus);
++Int32 Device_sii9233aSetSlaveAddress(Device_Sii9233aObj *pObj);
++Int32 Device_sii9233aSetFactoryMode(Device_Sii9233aObj *pObj);
++Int32 Device_sii9233aSetupEDID(Device_Sii9233aObj *pObj);
++#endif /*  _DEVICE_SII9233A_PRIV_H_  */
+diff --git a/dvr_rdk/mcfw/src_linux/devices/src/devices.c b/dvr_rdk/mcfw/src_linux/devices/src/devices.c
+index d570867..b0360a3 100755
+--- a/dvr_rdk/mcfw/src_linux/devices/src/devices.c
++++ b/dvr_rdk/mcfw/src_linux/devices/src/devices.c
+@@ -99,6 +99,138 @@ UInt32 Device_getVidDecI2cAddr(UInt32 vidDecId, UInt32 vipInstId)
+     }
+ #endif
+ 
++#if defined(TI816X_CZ) || defined(TI8107_INS)
++    UInt32 devAddrSii9233A[DEVICE_CAPT_INST_MAX] = { 0x30, 0x00, 0x31, 0x00 };
++
++    switch (vidDecId)
++    {
++        case DEVICE_VID_DEC_SII9233A_DRV:
++            devAddr = devAddrSii9233A[0];
++            break;
++
++        default:
++           break;
++    }
++#endif
++
++#ifdef TI816X_ETVH
++    UInt32 devAddrSii9233A[DEVICE_CAPT_INST_MAX] = { 0x30, 0x00, 0x31, 0x00 };
++    UInt8  devAddrSii9022[2u]                    = { 0x39, 0x39 };
++
++    switch (vidDecId)
++    {
++        case DEVICE_VID_DEC_SII9233A_DRV:
++            devAddr = devAddrSii9233A[vipInstId];
++            break;
++
++        case DEVICE_VID_ENC_SII9022A_DRV:
++            devAddr = devAddrSii9022[0];
++            break;
++
++        default:
++           break;
++
++    }
++#endif
++
++#ifdef TI816X_ETVS
++    UInt8  devAddrSii9022[2u]                    = { 0x39, 0x39 };
++
++    switch (vidDecId)
++    {
++        case DEVICE_VID_ENC_SII9022A_DRV:
++            devAddr = devAddrSii9022[0];
++            break;
++
++        default:
++           break;
++    }
++#endif
++
++#ifdef TI816X_ES
++    UInt8  devAddrSii9022[2u]                    = { 0x39, 0x39 };
++
++    switch (vidDecId)
++    {
++        case DEVICE_VID_ENC_SII9022A_DRV:
++            devAddr = devAddrSii9022[0];
++            break;
++
++        default:
++           break;
++    }
++#endif
++
++#ifdef TI816X_BTJX
++    UInt8  devAddrSii9022[2u]                    = { 0x39, 0x39 };
++
++    switch (vidDecId)
++    {
++        case DEVICE_VID_ENC_SII9022A_DRV:
++            devAddr = devAddrSii9022[0];
++            break;
++
++        default:
++           break;
++    }
++#endif
++
++#ifdef TI816X_SBTJX
++    UInt8  devAddrSii9022[2u]                    = { 0x39, 0x39 };
++
++    switch (vidDecId)
++    {
++        case DEVICE_VID_ENC_SII9022A_DRV:
++            devAddr = devAddrSii9022[0];
++            break;
++
++        default:
++           break;
++    }
++#endif
++
++#ifdef TI816X_HJ
++    UInt8  devAddrSii9022[2u]                    = { 0x39, 0x39 };
++
++    switch (vidDecId)
++    {
++        case DEVICE_VID_ENC_SII9022A_DRV:
++            devAddr = devAddrSii9022[0];
++            break;
++
++        default:
++           break;
++    }
++#endif
++
++#ifdef TI816X_VCS
++    UInt8  devAddrSii9022[2u]                    = { 0x39, 0x39 };
++
++    switch (vidDecId)
++    {
++        case DEVICE_VID_ENC_SII9022A_DRV:
++            devAddr = devAddrSii9022[0];
++            break;
++
++        default:
++           break;
++    }
++#endif
++
++#ifdef TI816X_VRS
++    UInt8  devAddrSii9022[2u]                    = { 0x39, 0x39 };
++
++    switch (vidDecId)
++    {
++        case DEVICE_VID_ENC_SII9022A_DRV:
++            devAddr = devAddrSii9022[0];
++            break;
++
++        default:
++           break;
++    }
++#endif
++
+ #if defined (TI814X_EVM) || defined (TI8107_EVM) || defined (TI8107_DVR)
+ 
+ #if defined(TI8107_UD_DVR)
+-- 
+2.7.4
+
