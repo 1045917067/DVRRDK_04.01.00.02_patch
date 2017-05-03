@@ -1,0 +1,38 @@
+From a3419587fd5c4ef2ff00db2d7d731e6f96f7c9d9 Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Fri, 10 Jun 2016 18:09:52 +0800
+Subject: [PATCH 19/42] Change SWOSD_MAX_WIDTH from 720 to 1920.
+
+---
+ dvr_rdk/mcfw/src_bios6/alg/swosd/sw_osd.h | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/dvr_rdk/mcfw/src_bios6/alg/swosd/sw_osd.h b/dvr_rdk/mcfw/src_bios6/alg/swosd/sw_osd.h
+index e9dd6cb..31c398c 100755
+--- a/dvr_rdk/mcfw/src_bios6/alg/swosd/sw_osd.h
++++ b/dvr_rdk/mcfw/src_bios6/alg/swosd/sw_osd.h
+@@ -18,7 +18,21 @@ extern "C" {
+ 
+ 
+ 
++/*
++ *  Modified by: zzx.
++ *
++ *  Date       : May 11, 2015.
++ *
++ *  Description:
++ *
++ *               Change SWOSD_MAX_WIDTH from 720 to 1920.
++ */
++
++#if 0
+ #define SWOSD_MAX_WIDTH  720  ///< Max supported window width
++#else
++#define SWOSD_MAX_WIDTH  1920  ///< Max supported window width
++#endif
+ 
+ #define SWOSD_SOK    0  ///< Status : OK
+ #define SWOSD_EFAIL  -1 ///< Status : Generic error
+-- 
+2.7.4
+
