@@ -1,0 +1,46 @@
+From cda186795b4e573e27520464338ff02fd02bb4b9 Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Wed, 8 Jun 2016 17:33:33 +0800
+Subject: [PATCH 08/42] Fixed bug in disable decode channel.
+
+---
+ .../src_bios6/links_m3video/iva_dec/decLink_common.c  | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
+
+diff --git a/dvr_rdk/mcfw/src_bios6/links_m3video/iva_dec/decLink_common.c b/dvr_rdk/mcfw/src_bios6/links_m3video/iva_dec/decLink_common.c
+index b2a734c..d03ce8a 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_m3video/iva_dec/decLink_common.c
++++ b/dvr_rdk/mcfw/src_bios6/links_m3video/iva_dec/decLink_common.c
+@@ -1623,10 +1623,29 @@ static Int32 DecLink_codecQueueBufsToChQue(DecLink_Obj * pObj)
+             }
+             else if((pChObj->disableChn == FALSE) && pChObj->skipFrame)
+             {
++#if 0
+                 if(pBuf->isKeyFrame == TRUE)
+                 {
+                     pChObj->skipFrame = FALSE;
+                 }
++#else
++                /*
++                 *  Modified by: zzx.
++                 *
++                 *  Date       : Aug 15, 2013.
++                 *
++                 *  Description:
++                 *
++                 *  Bug here!!!
++                 *
++                 *  If we reach here means that we had received cmd
++                 *  'DISABLE_CHANNEL' and then 'ENABLE_CHANNEL'. So
++                 *  we must set the skipFrame to FALSE irrespective of
++                 *  the flag pBuf->isKeyFrame.
++                 *
++				 */
++				pChObj->skipFrame = FALSE;
++#endif
+             }
+ 
+             if (((   ((pChObj->IFrameOnlyDecode) && (!pBuf->isKeyFrame))
+-- 
+2.7.4
+
