@@ -1,0 +1,2032 @@
+From 1ce79d83723fa6c5d7d43ab537b682c7963aaf32 Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Wed, 8 Jun 2016 16:40:14 +0800
+Subject: [PATCH 03/42] Add video standard support.
+
+---
+ .../interfaces/common_def/ti_vsys_common_def.h     | 258 +++++++-
+ dvr_rdk/mcfw/interfaces/link_api/system_const.h    |  27 +-
+ dvr_rdk/mcfw/interfaces/ti_vdis_timings.h          |  43 ++
+ .../src_bios6/links_common/system/system_common.c  |  12 +-
+ .../src_bios6/links_m3vpss/system/system_dctrl.c   |  73 ++-
+ .../links_m3vpss/system/system_dctrl_modeInfo.c    | 109 +++-
+ .../src_bios6/links_m3vpss/system/system_m3vpss.c  |  54 +-
+ .../mcfw/src_linux/devices/sii9022a/src/sii9022a.c |  67 ++-
+ dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis.c          | 662 ++++++++++++++++++++-
+ .../packages/ti/psp/vps/drivers/src/fvid2_drvMgr.c |  22 +-
+ .../dvr_rdk_hdvpss/packages/ti/psp/vps/fvid2.h     |  30 +-
+ .../packages/ti/psp/vps/hal/src/vpshal_hdvenc.c    |  62 +-
+ 12 files changed, 1246 insertions(+), 173 deletions(-)
+
+diff --git a/dvr_rdk/mcfw/interfaces/common_def/ti_vsys_common_def.h b/dvr_rdk/mcfw/interfaces/common_def/ti_vsys_common_def.h
+index 4313870..3f8b772 100755
+--- a/dvr_rdk/mcfw/interfaces/common_def/ti_vsys_common_def.h
++++ b/dvr_rdk/mcfw/interfaces/common_def/ti_vsys_common_def.h
+@@ -169,12 +169,12 @@ typedef enum
+     VSYS_STD_NTSC = 0u,
+     /**< 720x480 30FPS interlaced NTSC standard. */
+     VSYS_STD_PAL,
+-    /**< 720x576 30FPS interlaced PAL standard. */
++    /**< 720x576 25FPS interlaced PAL standard. */
+ 
+     VSYS_STD_480I,
+     /**< 720x480 30FPS interlaced SD standard. */
+     VSYS_STD_576I,
+-    /**< 720x576 30FPS interlaced SD standard. */
++    /**< 720x576 25FPS interlaced SD standard. */
+ 
+     VSYS_STD_CIF,
+     /**< Interlaced, 360x120 per field NTSC, 360x144 per field PAL. */
+@@ -185,30 +185,42 @@ typedef enum
+ 
+     VSYS_STD_480P,
+     /**< 720x480 60FPS progressive ED standard. */
++    VSYS_STD_480P_30,
++    /**< 720x480 30FPS progressive ED standard. */
+     VSYS_STD_576P,
+-    /**< 720x576 60FPS progressive ED standard. */
++    /**< 720x576 50FPS progressive ED standard. */
++    VSYS_STD_576P_25,
++    /**< 720x576 25FPS progressive ED standard. */
+ 
+     VSYS_STD_720P_60,
+     /**< 1280x720 60FPS progressive HD standard. */
+     VSYS_STD_720P_50,
+     /**< 1280x720 50FPS progressive HD standard. */
++    VSYS_STD_720P_30,
++    /**< 1280x720 30FPS progressive HD standard. */
++    VSYS_STD_720P_25,
++    /**< 1280x720 25FPS progressive HD standard. */
++    VSYS_STD_720P_24,
++    /**< 1280x720 24FPS progressive HD standard. */
+ 
+     VSYS_STD_1080I_60,
+     /**< 1920x1080 30FPS interlaced HD standard. */
+     VSYS_STD_1080I_50,
+-    /**< 1920x1080 50FPS interlaced HD standard. */
++    /**< 1920x1080 25FPS interlaced HD standard. */
+ 
+     VSYS_STD_1080P_60,
+     /**< 1920x1080 60FPS progressive HD standard. */
+     VSYS_STD_1080P_50,
+     /**< 1920x1080 50FPS progressive HD standard. */
+ 
+-    VSYS_STD_1080P_24,
+-    /**< 1920x1080 24FPS progressive HD standard. */
+     VSYS_STD_1080P_30,
+     /**< 1920x1080 30FPS progressive HD standard. */
++    VSYS_STD_1080P_25,
++    /**< 1920x1080 25FPS progressive HD standard. */
++    VSYS_STD_1080P_24,
++    /**< 1920x1080 24FPS progressive HD standard. */
+ 
+-    VSYS_STD_VGA_60,
++    VSYS_STD_VGA_60 = 0x100,
+     /**< 640x480 60FPS VESA standard. */
+     VSYS_STD_VGA_72,
+     /**< 640x480 72FPS VESA standard. */
+@@ -217,6 +229,9 @@ typedef enum
+     VSYS_STD_VGA_85,
+     /**< 640x480 85FPS VESA standard. */
+ 
++    VSYS_STD_WVGA_60,
++    /**< 800x480 60FPS WVGA */
++
+     VSYS_STD_SVGA_60,
+     /**< 800x600 60FPS VESA standard. */
+     VSYS_STD_SVGA_72,
+@@ -226,6 +241,9 @@ typedef enum
+     VSYS_STD_SVGA_85,
+     /**< 800x600 85FPS VESA standard. */
+ 
++    VSYS_STD_WSVGA_70,
++    /**< 1024x600 70FPS standard. */
++    
+     VSYS_STD_XGA_60,
+     /**< 1024x768 60FPS VESA standard. */
+     VSYS_STD_XGA_70,
+@@ -235,13 +253,23 @@ typedef enum
+     VSYS_STD_XGA_85,
+     /**< 1024x768 85FPS VESA standard. */
+ 
++    VSYS_STD_1368_768_60,
++    /**< 1368x768 60FPS VESA>*/
++    VSYS_STD_1366_768_60,
++    /**< 1366x768 60FPS VESA>*/
++    VSYS_STD_1360_768_60,
++    /**< 1360x768 60FPS VESA>*/
++    
+     VSYS_STD_WXGA_60,
+     /**< 1280x768 60FPS VESA standard. */
+     VSYS_STD_WXGA_75,
+     /**< 1280x768 75FPS VESA standard. */
+     VSYS_STD_WXGA_85,
+     /**< 1280x768 85FPS VESA standard. */
+-
++    
++    VSYS_STD_1440_900_60,
++    /**< 1440x900 60FPS VESA>*/
++    
+     VSYS_STD_SXGA_60,
+     /**< 1280x1024 60FPS VESA standard. */
+     VSYS_STD_SXGA_75,
+@@ -249,6 +277,9 @@ typedef enum
+     VSYS_STD_SXGA_85,
+     /**< 1280x1024 85FPS VESA standard. */
+ 
++    VSYS_STD_WSXGAP_60,
++    /**< 1680x1050 60FPS VESA>*/
++    
+     VSYS_STD_SXGAP_60,
+     /**< 1400x1050 60FPS VESA standard. */
+     VSYS_STD_SXGAP_75,
+@@ -257,7 +288,10 @@ typedef enum
+     VSYS_STD_UXGA_60,
+     /**< 1600x1200 60FPS VESA standard. */
+ 
+-    VSYS_STD_MUX_2CH_D1,
++    VSYS_STD_WUXGA_60,
++    /**< 1920x1200 60FPS VESA standard. */
++    
++    VSYS_STD_MUX_2CH_D1 = 0x200,
+     /**< Interlaced, 2Ch D1, NTSC or PAL. */
+     VSYS_STD_MUX_2CH_HALF_D1,
+     /**< Interlaced, 2ch half D1, NTSC or PAL. */
+@@ -273,14 +307,38 @@ typedef enum
+     /**< Interlaced, 8Ch CIF, NTSC or PAL. */
+     VSYS_STD_MUX_8CH_HALF_D1,
+     /**< Interlaced, 8Ch Half-D1, NTSC or PAL. */
++    VSYS_STD_MUX_4CH_960H,
++    /**< Interlaced ,4Ch 960H , NTSC or PAL */
+ 
+-    VSYS_STD_AUTO_DETECT,
++    VSYS_STD_AUTO_DETECT = 0x300,
+     /**< Auto-detect standard. Used in capture mode. */
+     VSYS_STD_CUSTOM,
+     /**< Custom standard used when connecting to external LCD etc...
+          The video timing is provided by the application.
+          Used in display mode. */
+ 
++
++    /*
++     *  Modified by: zzx.
++     *
++     *  Date       : Apr 17, 2014.
++     *
++     *  Description:
++     *
++     *               Add more vsys video std.
++     */
++    VSYS_STD_576P_30 = 0x400,
++    /**< 720x576 30FPS progressive. */
++
++    VSYS_STD_576P_24,
++    /**< 720x576 24FPS progressive. */
++
++    VSYS_STD_CIF_30,
++    /**< 352x288 30FPS progressive. */
++
++    VSYS_STD_CIF_25,
++    /**< 352x288 25FPS progressive. */
++
+     VSYS_STD_MAX
+     /**< Should be the last value of this enumeration.
+          Will be used by driver for validating the input parameters. */
+@@ -590,6 +648,186 @@ typedef struct VSYS_SLAVE_CORE_EXCEPTION_INFO_S {
+ } VSYS_SLAVE_CORE_EXCEPTION_INFO_S;
+ /*@}*/
+ 
++static inline UInt32 Vsys_getStdSize(UInt32 std, UInt32 *width, UInt32 *height)
++{
++    switch (std)
++    {
++        case VSYS_STD_MAX:
++        case VSYS_STD_WUXGA_60:
++            *width = 1920;
++            *height = 1200;
++            break;
++
++        case VSYS_STD_UXGA_60:
++            *width = 1600;
++            *height = 1200;
++            break;
++        case VSYS_STD_WSXGAP_60:
++            *width = 1680;
++            *height = 1050;
++            break;
++        case VSYS_STD_SXGAP_60:
++            *width = 1400;
++            *height = 1050;
++            break;
++        case VSYS_STD_1360_768_60:
++            *width = 1360;
++            *height = 768;
++            break;
++        case VSYS_STD_SXGA_60:
++            *width = 1280;
++            *height = 1024;
++            break;
++        case VSYS_STD_WXGA_60:
++            *width = 1280;
++            *height = 768;
++            break;
++        case VSYS_STD_XGA_60:
++            *width = 1024;
++            *height = 768;
++            break;
++        case VSYS_STD_SVGA_60:
++            *width = 800;
++            *height = 600;
++            break;
++        case VSYS_STD_WVGA_60:
++            *width = 800;
++            *height = 480;
++            break;
++        case VSYS_STD_VGA_60:
++            *width = 640;
++            *height = 480;
++            break;
++
++        case VSYS_STD_720P_60:
++        case VSYS_STD_720P_50:
++        case VSYS_STD_720P_30:
++        case VSYS_STD_720P_25:
++        case VSYS_STD_720P_24:
++            *width = 1280;
++            *height = 720;
++            break;
++
++        case VSYS_STD_480P:
++        case VSYS_STD_480P_30:
++        case VSYS_STD_480I:
++        case VSYS_STD_NTSC:
++            *width = 720;
++            *height = 480;
++            break;
++        case VSYS_STD_576P:
++        case VSYS_STD_576P_30:
++        case VSYS_STD_576P_25:
++        case VSYS_STD_576P_24:
++        case VSYS_STD_576I:
++        case VSYS_STD_PAL:
++            *width = 720;
++            *height = 576;
++            break;
++
++        case VSYS_STD_CIF:
++        	*width = 352;
++        	*height = 240;
++        	break;
++
++        case VSYS_STD_CIF_30:
++        case VSYS_STD_CIF_25:
++            *width = 352;
++            *height = 288;
++            break;
++
++        default:
++        case VSYS_STD_1080I_60:
++        case VSYS_STD_1080I_50:
++        case VSYS_STD_1080P_60:
++        case VSYS_STD_1080P_50:
++        case VSYS_STD_1080P_30:
++        case VSYS_STD_1080P_25:
++        case VSYS_STD_1080P_24:
++            *width = 1920;
++            *height = 1080;
++            break;
++    }
++    return 0;
++}
++
++static inline UInt32 Vsys_getStdRate(UInt32 std)
++{
++    UInt32 frameRate = 0;
++    switch (std)
++    {
++        case VSYS_STD_MAX:
++        case VSYS_STD_1080P_60:
++        case VSYS_STD_720P_60:
++        case VSYS_STD_480P:
++        case VSYS_STD_WUXGA_60:
++        case VSYS_STD_UXGA_60:
++        case VSYS_STD_WSXGAP_60:
++        case VSYS_STD_SXGAP_60:
++        case VSYS_STD_1360_768_60:
++        case VSYS_STD_SXGA_60:
++        case VSYS_STD_WXGA_60:
++        case VSYS_STD_XGA_60:
++        case VSYS_STD_SVGA_60:
++        case VSYS_STD_WVGA_60:
++        case VSYS_STD_VGA_60:
++        case VSYS_STD_CIF:
++            frameRate = 60;
++            break;
++
++        case VSYS_STD_1080P_50:
++        case VSYS_STD_720P_50:
++        case VSYS_STD_576P:
++            frameRate = 50;
++            break;
++
++        case VSYS_STD_1080I_60:
++        case VSYS_STD_1080P_30:
++        case VSYS_STD_720P_30:
++        case VSYS_STD_480P_30:
++        case VSYS_STD_480I:
++        case VSYS_STD_NTSC:
++        case VSYS_STD_576P_30:
++        case VSYS_STD_CIF_30:
++            frameRate = 30;
++            break;
++
++        case VSYS_STD_1080I_50:
++        case VSYS_STD_1080P_25:
++        case VSYS_STD_720P_25:
++        case VSYS_STD_576P_25:
++        case VSYS_STD_576I:
++        case VSYS_STD_PAL:
++        case VSYS_STD_CIF_25:
++            frameRate = 25;
++            break;
++
++        case VSYS_STD_1080P_24:
++        case VSYS_STD_720P_24:
++        case VSYS_STD_576P_24:
++            frameRate = 24;
++            break;
++    }
++    return frameRate;
++}
++
++static inline UInt32 Vsys_isStdInterlaced(UInt32 std)
++{
++    UInt32 isInterlaced = FALSE;
++    switch (std)
++    {
++        case VSYS_STD_1080I_60:
++        case VSYS_STD_1080I_50:
++        case VSYS_STD_576I:
++        case VSYS_STD_480I:
++        case VSYS_STD_PAL:
++        case VSYS_STD_NTSC:
++            isInterlaced = TRUE;
++            break;
++    }
++    return isInterlaced;
++}
++
+ #ifdef  __cplusplus
+ }
+ #endif
+diff --git a/dvr_rdk/mcfw/interfaces/link_api/system_const.h b/dvr_rdk/mcfw/interfaces/link_api/system_const.h
+index ea94f4c..dc41b29 100755
+--- a/dvr_rdk/mcfw/interfaces/link_api/system_const.h
++++ b/dvr_rdk/mcfw/interfaces/link_api/system_const.h
+@@ -316,12 +316,12 @@ typedef enum
+     SYSTEM_STD_NTSC = 0u,
+     /**< 720x480 30FPS interlaced NTSC standard. */
+     SYSTEM_STD_PAL,
+-    /**< 720x576 30FPS interlaced PAL standard. */
++    /**< 720x576 25FPS interlaced PAL standard. */
+ 
+     SYSTEM_STD_480I,
+     /**< 720x480 30FPS interlaced SD standard. */
+     SYSTEM_STD_576I,
+-    /**< 720x576 30FPS interlaced SD standard. */
++    /**< 720x576 25FPS interlaced SD standard. */
+ 
+     SYSTEM_STD_CIF,
+     /**< Interlaced, 360x120 per field NTSC, 360x144 per field PAL. */
+@@ -332,28 +332,40 @@ typedef enum
+ 
+     SYSTEM_STD_480P,
+     /**< 720x480 60FPS progressive ED standard. */
++    SYSTEM_STD_480P_30,
++    /**< 720x480 30FPS progressive ED standard. */
+     SYSTEM_STD_576P,
+-    /**< 720x576 60FPS progressive ED standard. */
++    /**< 720x576 50FPS progressive ED standard. */
++    SYSTEM_STD_576P_25,
++    /**< 720x576 25FPS progressive ED standard. */
+ 
+     SYSTEM_STD_720P_60,
+     /**< 1280x720 60FPS progressive HD standard. */
+     SYSTEM_STD_720P_50,
+     /**< 1280x720 50FPS progressive HD standard. */
++    SYSTEM_STD_720P_30,
++    /**< 1280x720 30FPS progressive HD standard. */
++    SYSTEM_STD_720P_25,
++    /**< 1280x720 25FPS progressive HD standard. */
++    SYSTEM_STD_720P_24,
++    /**< 1280x720 24FPS progressive HD standard. */
+ 
+     SYSTEM_STD_1080I_60,
+     /**< 1920x1080 30FPS interlaced HD standard. */
+     SYSTEM_STD_1080I_50,
+-    /**< 1920x1080 50FPS interlaced HD standard. */
++    /**< 1920x1080 25FPS interlaced HD standard. */
+ 
+     SYSTEM_STD_1080P_60,
+     /**< 1920x1080 60FPS progressive HD standard. */
+     SYSTEM_STD_1080P_50,
+     /**< 1920x1080 50FPS progressive HD standard. */
+ 
+-    SYSTEM_STD_1080P_24,
+-    /**< 1920x1080 24FPS progressive HD standard. */
+     SYSTEM_STD_1080P_30,
+     /**< 1920x1080 30FPS progressive HD standard. */
++    SYSTEM_STD_1080P_25,
++    /**< 1920x1080 25FPS progressive HD standard. */
++    SYSTEM_STD_1080P_24,
++    /**< 1920x1080 24FPS progressive HD standard. */
+ 
+     /* Vesa standards from here Please add all SMTPE and CEA standard enums
+        above this only. this is to ensure proxy Oses compatibility
+@@ -440,6 +452,9 @@ typedef enum
+     SYSTEM_STD_UXGA_60,
+     /**< 1600x1200 60FPS VESA standard. */
+ 
++    SYSTEM_STD_WUXGA_60,
++    /**< 1920x1200 60FPS VESA standard. */
++
+     /* Multi channel standards from here Please add all VESA standards enums
+        above this only. this is to ensure proxy Oses compatibility */
+ #ifdef HDVPSS_VER_01_00_01_36
+diff --git a/dvr_rdk/mcfw/interfaces/ti_vdis_timings.h b/dvr_rdk/mcfw/interfaces/ti_vdis_timings.h
+index 237de76..bffa9ab 100755
+--- a/dvr_rdk/mcfw/interfaces/ti_vdis_timings.h
++++ b/dvr_rdk/mcfw/interfaces/ti_vdis_timings.h
+@@ -92,6 +92,7 @@ static inline int Vdis_sysfsWrite(char *fileName, char *val)
+ #define VDIS_SYSFSCMD_GET_GRPX        VDIS_SYSFSCMD_SET_GRPX
+ #define VDIS_SYSFSCMD_GET_GRPX_NODE   VDIS_SYSFSCMD_SET_GRPX_NODE
+ 
++#if 0
+ #define VDIS_TIMINGS_1080P_60 "148500,1920/88/148/44,1080/4/36/5,1"
+ #define VDIS_TIMINGS_1080P_50 "148500,1920/528/148/44,1080/4/36/5,1"
+ #define VDIS_TIMINGS_720P_60  "74250,1280/110/220/40,720/5/20/5,1"
+@@ -103,6 +104,48 @@ static inline int Vdis_sysfsWrite(char *fileName, char *val)
+ #define VDIS_TIMINGS_VGA_VESA "25175,640/16/48/96,480/11/31/2,1"
+ #define VDIS_MODE_NTSC        "ntsc"
+ #define VDIS_MODE_PAL         "pal"
++#else
++/*
++ *  Modified by: zzx.
++ *
++ *  Date       : Jan 13, 2014.
++ *
++ *  Description:
++ *
++ *      Add more resolution support.
++ *
++ */
++#define VDIS_TIMINGS_1080P_60      "148500,1920/88/148/44,1080/4/36/5,1"
++#define VDIS_TIMINGS_1080P_50      "148500,1920/528/148/44,1080/4/36/5,1"
++#define VDIS_TIMINGS_1080P_30      "74250,1920/88/148/44,1080/4/36/5,1"
++#define VDIS_TIMINGS_1080P_25      "74250,1920/528/148/44,1080/4/36/5,1"
++#define VDIS_TIMINGS_1080P_24      "74250,1920/638/148/44,1080/4/36/5,1"
++#define VDIS_TIMINGS_1080I_60      "74250,1920/88/148/44,1080/2/15/5,0"
++#define VDIS_TIMINGS_1080I_50      "74250,1920/528/148/44,1080/2/15/5,0"
++#define VDIS_TIMINGS_720P_60       "74250,1280/110/220/40,720/5/20/5,1"
++#define VDIS_TIMINGS_720P_50       "74250,1280/440/220/40,720/5/20/5,1"
++#define VDIS_TIMINGS_720P_30       "74250,1280/1760/220/40,720/5/20/5,1"
++#define VDIS_TIMINGS_720P_25       "74250,1280/2420/220/40,720/5/20/5,1"
++#define VDIS_TIMINGS_720P_24       "74250,1280/2585/220/40,720/5/20/5,1"
++#define VDIS_TIMINGS_480P          "27000,720/16/60/62,480/9/30/6,1"
++#define VDIS_TIMINGS_480P_30       "27000,720/874/60/62,480/9/30/6,1"
++#define VDIS_TIMINGS_576P          "27000,720/12/68/64,576/5/39/5,1"
++#define VDIS_TIMINGS_576P_25       "27000,720/876/68/64,576/5/39/5,1"
++#define VDIS_TIMINGS_WUXGA_60      "193250,1920/136/336/200,1200/3/36/6,1"
++#define VDIS_TIMINGS_UXGA_60       "162000,1600/64/304/192,1200/1/46/3,1"
++#define VDIS_TIMINGS_WSXGAP_60     "146250,1680/104/280/176,1050/3/30/6,1"
++#define VDIS_TIMINGS_SXGAP_60      "121750,1400/88/232/144,1050/3/32/4,1"
++#define VDIS_TIMINGS_1360_768_60   "85500,1360/64/256/112,768/3/18/6,1"
++#define VDIS_TIMINGS_SXGA_60       "108000,1280/48/248/112,1024/1/38/3,1"
++#define VDIS_TIMINGS_WXGA_60       "79500,1280/64/192/128,768/3/20/7,1"
++#define VDIS_TIMINGS_XGA_60        "65000,1024/24/160/136,768/3/29/6,1"
++#define VDIS_TIMINGS_SVGA_60       "40000,800/40/88/128,600/1/23/4,1"
++#define VDIS_TIMINGS_VGA_60        "25175,640/16/48/96,480/11/31/2,1"
++#define VDIS_TIMINGS_VGA_CEA       "25200,640/16/48/96,480/9/34/2,1"
++#define VDIS_TIMINGS_VGA_VESA      "25175,640/16/48/96,480/11/31/2,1"
++#define VDIS_MODE_NTSC             "ntsc"
++#define VDIS_MODE_PAL              "pal"
++#endif
+ 
+ #define VDIS_ON               "1"
+ #define VDIS_OFF              "0"
+diff --git a/dvr_rdk/mcfw/src_bios6/links_common/system/system_common.c b/dvr_rdk/mcfw/src_bios6/links_common/system/system_common.c
+index 12d1390..e9d49b5 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_common/system/system_common.c
++++ b/dvr_rdk/mcfw/src_bios6/links_common/system/system_common.c
+@@ -328,19 +328,26 @@ int System_enumAssertCheck()
+     UTILS_COMPILETIME_ASSERT(SYSTEM_STD_HALF_D1 == FVID2_STD_HALF_D1);
+     UTILS_COMPILETIME_ASSERT(SYSTEM_STD_D1 == FVID2_STD_D1);
+     UTILS_COMPILETIME_ASSERT(SYSTEM_STD_480P == FVID2_STD_480P);
++    UTILS_COMPILETIME_ASSERT(SYSTEM_STD_480P_30 == FVID2_STD_480P_30);
+     UTILS_COMPILETIME_ASSERT(SYSTEM_STD_576P == FVID2_STD_576P);
++    UTILS_COMPILETIME_ASSERT(SYSTEM_STD_576P_25 == FVID2_STD_576P_25);
+     UTILS_COMPILETIME_ASSERT(SYSTEM_STD_720P_60 == FVID2_STD_720P_60);
+     UTILS_COMPILETIME_ASSERT(SYSTEM_STD_720P_50 == FVID2_STD_720P_50);
++    UTILS_COMPILETIME_ASSERT(SYSTEM_STD_720P_30 == FVID2_STD_720P_30);
++    UTILS_COMPILETIME_ASSERT(SYSTEM_STD_720P_25 == FVID2_STD_720P_25);
++    UTILS_COMPILETIME_ASSERT(SYSTEM_STD_720P_24 == FVID2_STD_720P_24);
+     UTILS_COMPILETIME_ASSERT(SYSTEM_STD_1080I_60 == FVID2_STD_1080I_60);
+     UTILS_COMPILETIME_ASSERT(SYSTEM_STD_1080I_50 == FVID2_STD_1080I_50);
+     UTILS_COMPILETIME_ASSERT(SYSTEM_STD_1080P_60 == FVID2_STD_1080P_60);
+     UTILS_COMPILETIME_ASSERT(SYSTEM_STD_1080P_50 == FVID2_STD_1080P_50);
+-    UTILS_COMPILETIME_ASSERT(SYSTEM_STD_1080P_24 == FVID2_STD_1080P_24);
+     UTILS_COMPILETIME_ASSERT(SYSTEM_STD_1080P_30 == FVID2_STD_1080P_30);
++    UTILS_COMPILETIME_ASSERT(SYSTEM_STD_1080P_25 == FVID2_STD_1080P_25);
++    UTILS_COMPILETIME_ASSERT(SYSTEM_STD_1080P_24 == FVID2_STD_1080P_24);
+     UTILS_COMPILETIME_ASSERT(SYSTEM_STD_VGA_60 == FVID2_STD_VGA_60);
+     UTILS_COMPILETIME_ASSERT(SYSTEM_STD_VGA_72 == FVID2_STD_VGA_72);
+     UTILS_COMPILETIME_ASSERT(SYSTEM_STD_VGA_75 == FVID2_STD_VGA_75);
+     UTILS_COMPILETIME_ASSERT(SYSTEM_STD_VGA_85 == FVID2_STD_VGA_85);
++    UTILS_COMPILETIME_ASSERT(SYSTEM_STD_WVGA_60 == FVID2_STD_WVGA_60);
+     UTILS_COMPILETIME_ASSERT(SYSTEM_STD_SVGA_60 == FVID2_STD_SVGA_60);
+     UTILS_COMPILETIME_ASSERT(SYSTEM_STD_SVGA_72 == FVID2_STD_SVGA_72);
+     UTILS_COMPILETIME_ASSERT(SYSTEM_STD_SVGA_75 == FVID2_STD_SVGA_75);
+@@ -355,9 +362,12 @@ int System_enumAssertCheck()
+     UTILS_COMPILETIME_ASSERT(SYSTEM_STD_SXGA_60 == FVID2_STD_SXGA_60);
+     UTILS_COMPILETIME_ASSERT(SYSTEM_STD_SXGA_75 == FVID2_STD_SXGA_75);
+     UTILS_COMPILETIME_ASSERT(SYSTEM_STD_SXGA_85 == FVID2_STD_SXGA_85);
++    UTILS_COMPILETIME_ASSERT(SYSTEM_STD_1360_768_60 == FVID2_STD_1360_768_60);
+     UTILS_COMPILETIME_ASSERT(SYSTEM_STD_SXGAP_60 == FVID2_STD_SXGAP_60);
+     UTILS_COMPILETIME_ASSERT(SYSTEM_STD_SXGAP_75 == FVID2_STD_SXGAP_75);
++    UTILS_COMPILETIME_ASSERT(SYSTEM_STD_WSXGAP_60 == FVID2_STD_WSXGAP_60);
+     UTILS_COMPILETIME_ASSERT(SYSTEM_STD_UXGA_60 == FVID2_STD_UXGA_60);
++    UTILS_COMPILETIME_ASSERT(SYSTEM_STD_WUXGA_60 == FVID2_STD_WUXGA_60);
+     UTILS_COMPILETIME_ASSERT(SYSTEM_STD_MUX_2CH_D1 == FVID2_STD_MUX_2CH_D1);
+     UTILS_COMPILETIME_ASSERT(SYSTEM_STD_MUX_2CH_HALF_D1 == FVID2_STD_MUX_2CH_HALF_D1);
+     UTILS_COMPILETIME_ASSERT(SYSTEM_STD_MUX_2CH_CIF == FVID2_STD_MUX_2CH_CIF);
+diff --git a/dvr_rdk/mcfw/src_bios6/links_m3vpss/system/system_dctrl.c b/dvr_rdk/mcfw/src_bios6/links_m3vpss/system/system_dctrl.c
+index 625f947..afd9547 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_m3vpss/system/system_dctrl.c
++++ b/dvr_rdk/mcfw/src_bios6/links_m3vpss/system/system_dctrl.c
+@@ -242,37 +242,76 @@ Int32 System_getClk(UInt32 displayRes)
+ {
+     Int32 clkValue = VSYS_STD_MAX;
+     switch(displayRes) {
++        case VSYS_STD_1080P_60:
++        case VSYS_STD_1080P_50:
++            clkValue = 148500u;
++            break;
+         case VSYS_STD_1080P_30:
++        case VSYS_STD_1080P_25:
++        case VSYS_STD_1080P_24:
+         case VSYS_STD_1080I_60:
++        case VSYS_STD_1080I_50:
+             clkValue = 74250u;
+-        break;
++            break;
+         case VSYS_STD_720P_60:
+-            clkValue = 74250;
+-        break;
+-        case VSYS_STD_1080P_60:
+-        case VSYS_STD_1080P_50:
+-            clkValue = 148500u;
+-        break;
+-        case VSYS_STD_XGA_60:
+-            clkValue = 65000u;
+-        break;
++        case VSYS_STD_720P_50:
++        case VSYS_STD_720P_30:
++        case VSYS_STD_720P_25:
++        case VSYS_STD_720P_24:
++            clkValue = 74250u;
++            break;
++        case VSYS_STD_576P:
++        case VSYS_STD_576P_25:
++        case VSYS_STD_576I:
++        case VSYS_STD_PAL:
++        case VSYS_STD_480P:
++        case VSYS_STD_480P_30:
++        case VSYS_STD_480I:
++        case VSYS_STD_NTSC:
++            clkValue = 27000u;
++            break;
++        
++        case VSYS_STD_WUXGA_60:
++            clkValue = 193250u;
++            break;
++        case VSYS_STD_UXGA_60:
++            clkValue = 162000u;
++            break;
++        case VSYS_STD_WSXGAP_60:
++            clkValue = 146250u;
++            break;
++        case VSYS_STD_SXGAP_60:
++            clkValue = 121750u;
++            break;
++        case VSYS_STD_1360_768_60:
++            clkValue = 85500u;
++            break;
+         case VSYS_STD_SXGA_60:
+             clkValue = 108000u;
+-        break;
++            break;
++        case VSYS_STD_WXGA_60:
++            clkValue = 79500u;
++            break;
++        case VSYS_STD_XGA_60:
++            clkValue = 65000u;
++            break;
+         case VSYS_STD_SVGA_60:
+             clkValue = 40000u;
+-        break;
+-        case VSYS_STD_PAL:
+-            clkValue = 27000u;
+-        break;
+-
++            break;
++        case VSYS_STD_WVGA_60:
++            clkValue = 33500u;
++            break;
++        case VSYS_STD_VGA_60:
++            clkValue = 25175u;
++            break;
+         default:
+             UTILS_assert(0);
+-        break;
++            break;
+     }
+     return(clkValue);
+ }
+ 
++
+ Int32 System_displayCtrlInit(VDIS_PARAMS_S * pPrm)
+ {
+ 
+diff --git a/dvr_rdk/mcfw/src_bios6/links_m3vpss/system/system_dctrl_modeInfo.c b/dvr_rdk/mcfw/src_bios6/links_m3vpss/system/system_dctrl_modeInfo.c
+index 5c5acbc..cd16670 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_m3vpss/system/system_dctrl_modeInfo.c
++++ b/dvr_rdk/mcfw/src_bios6/links_m3vpss/system/system_dctrl_modeInfo.c
+@@ -35,36 +35,103 @@ Int32 System_getVencMode(Int32 resolution)
+     Int32 vencMode;
+ 
+     switch(resolution){
+-        case VSYS_STD_1080P_30:
+-            vencMode = FVID2_STD_1080P_30;
+-        break;
+-        case VSYS_STD_1080I_60:
+-            vencMode = FVID2_STD_1080I_60;
+-        break;
+         case VSYS_STD_1080P_60:
+             vencMode = FVID2_STD_1080P_60;
+-        break;
++            break;
+         case VSYS_STD_1080P_50:
+             vencMode = FVID2_STD_1080P_50;
+-        break;
++            break;
++
++        case VSYS_STD_1080P_30:
++            vencMode = FVID2_STD_1080P_30;
++            break;
++        case VSYS_STD_1080P_25:
++            vencMode = FVID2_STD_1080P_25;
++            break;
++        case VSYS_STD_1080P_24:
++            vencMode = FVID2_STD_1080P_24;
++            break;
++        case VSYS_STD_1080I_60:
++            vencMode = FVID2_STD_1080I_60;
++            break;
++        case VSYS_STD_1080I_50:
++            vencMode = FVID2_STD_1080I_50;
++            break;
++
+         case VSYS_STD_720P_60:
+             vencMode = FVID2_STD_720P_60;
+-        break;
+-        case VSYS_STD_XGA_60:
+-            vencMode = FVID2_STD_XGA_60;
+-        break;
+-        case VSYS_STD_SXGA_60:
+-            vencMode = FVID2_STD_SXGA_60;
+-        break;
+-        case VSYS_STD_NTSC:
+-            vencMode = FVID2_STD_NTSC;
+-        break;
++            break;
++        case VSYS_STD_720P_50:
++            vencMode = FVID2_STD_720P_50;
++            break;
++        case VSYS_STD_720P_30:
++            vencMode = FVID2_STD_720P_30;
++            break;
++        case VSYS_STD_720P_25:
++            vencMode = FVID2_STD_720P_25;
++            break;
++        case VSYS_STD_720P_24:
++            vencMode = FVID2_STD_720P_24;
++            break;
++        
++        case VSYS_STD_576P:
++            vencMode = FVID2_STD_576P;
++            break;
++        case VSYS_STD_576P_25:
++            vencMode = FVID2_STD_576P_25;
++            break;
++        case VSYS_STD_576I:
++            vencMode = FVID2_STD_576I;
++            break;
+         case VSYS_STD_PAL:
+             vencMode = FVID2_STD_PAL;
+-        break;
++            break;
++        case VSYS_STD_480P:
++            vencMode = FVID2_STD_480P;
++            break;
++        case VSYS_STD_480P_30:
++            vencMode = FVID2_STD_480P_30;
++            break;
++        case VSYS_STD_480I:
++            vencMode = FVID2_STD_480I;
++            break;
++        case VSYS_STD_NTSC:
++            vencMode = FVID2_STD_NTSC;
++            break;
++
++        case VSYS_STD_WUXGA_60:
++            vencMode = FVID2_STD_WUXGA_60;
++            break;
++        case VSYS_STD_UXGA_60:
++            vencMode = FVID2_STD_UXGA_60;
++            break;
++        case VSYS_STD_WSXGAP_60:
++            vencMode = FVID2_STD_WSXGAP_60;
++            break;
++        case VSYS_STD_SXGAP_60:
++            vencMode = FVID2_STD_SXGAP_60;
++            break;
++        case VSYS_STD_1360_768_60:
++            vencMode = FVID2_STD_1360_768_60;
++            break;
++        case VSYS_STD_SXGA_60:
++            vencMode = FVID2_STD_SXGA_60;
++            break;
++        case VSYS_STD_WXGA_60:
++            vencMode = FVID2_STD_WXGA_60;
++            break;
++        case VSYS_STD_XGA_60:
++            vencMode = FVID2_STD_XGA_60;
++            break;
+         case VSYS_STD_SVGA_60:
+-            vencMode = FVID2_STD_CUSTOM;
+-        break;
++            vencMode = FVID2_STD_SVGA_60;
++            break;
++        case VSYS_STD_WVGA_60:
++            vencMode = FVID2_STD_WVGA_60;
++            break;
++        case VSYS_STD_VGA_60:
++            vencMode = FVID2_STD_VGA_60;
++            break;
+         default:
+             vencMode = FVID2_STD_1080P_60;
+ 
+diff --git a/dvr_rdk/mcfw/src_bios6/links_m3vpss/system/system_m3vpss.c b/dvr_rdk/mcfw/src_bios6/links_m3vpss/system/system_m3vpss.c
+index 3fae597..88f831a 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_m3vpss/system/system_m3vpss.c
++++ b/dvr_rdk/mcfw/src_bios6/links_m3vpss/system/system_m3vpss.c
+@@ -404,58 +404,6 @@ Int32 System_freeBlankFrame()
+ 
+ Int32 System_getOutSize(UInt32 outRes, UInt32 * width, UInt32 * height)
+ {
+-    switch (outRes)
+-    {
+-        case VSYS_STD_MAX:
+-            *width = 1920;
+-            *height = 1200;
+-            break;
+-
+-        case VSYS_STD_720P_60:
+-            *width = 1280;
+-            *height = 720;
+-            break;
+-        case VSYS_STD_XGA_60:
+-            *width = 1024;
+-            *height = 768;
+-            break;
+-        case VSYS_STD_SXGA_60:
+-            *width = 1280;
+-            *height = 1024;
+-            break;
+-        case VSYS_STD_SVGA_60:
+-            *width = 800;
+-            *height = 600;
+-            break;
+-        case VSYS_STD_NTSC:
+-            *width = 720;
+-            *height = 480;
+-            break;
+-        case VSYS_STD_PAL:
+-            *width = 720;
+-            *height = 576;
+-            break;
+-        case VSYS_STD_480P:
+-            *width = 720;
+-            *height = 480;
+-            break;
+-        case VSYS_STD_576P:
+-            *width = 720;
+-            *height = 576;
+-            break;
+-        case VSYS_STD_VGA_60:
+-           *width = 640;
+-           *height = 480;
+-            break;
+-        default:
+-        case VSYS_STD_1080I_60:
+-        case VSYS_STD_1080P_60:
+-        case VSYS_STD_1080P_50:
+-        case VSYS_STD_1080P_30:
+-            *width = 1920;
+-            *height = 1080;
+-            break;
+-
+-    }
++    Vsys_getStdSize(outRes,width,height);
+     return 0;
+ }
+diff --git a/dvr_rdk/mcfw/src_linux/devices/sii9022a/src/sii9022a.c b/dvr_rdk/mcfw/src_linux/devices/sii9022a/src/sii9022a.c
+index 1ade033..ac15d5f 100755
+--- a/dvr_rdk/mcfw/src_linux/devices/sii9022a/src/sii9022a.c
++++ b/dvr_rdk/mcfw/src_linux/devices/sii9022a/src/sii9022a.c
+@@ -125,24 +125,65 @@ static Int32 Device_sii9022aCalcCRC(UInt8 *regAddr, UInt8 *regValue, UInt32 *reg
+ 
+ Device_SiI9022AModeInfo SiI9022ModeInfo[] =
+ {
+-    {VSYS_STD_480P, 3, 2700, 60, 858, 525,
+-        {16, 0, 62, 9, 6}, {122, 36, 720, 480}},
+-    {VSYS_STD_576P, 18, 2700, 50, 864, 625,
+-        {12, 0, 64, 5, 5}, {132, 44, 720, 576}},
+-    {VSYS_STD_720P_60, 4, 7425, 60, 1650, 750,
+-        {110, 0, 40, 5, 5}, {260, 25, 1280, 720}},
+-    {VSYS_STD_720P_50, 19, 7425, 50, 1980, 750,
+-        {440, 0, 40, 5, 5}, {260, 25, 1280, 720}},
+-    {VSYS_STD_1080P_30, 34, 7425, 30, 2200, 1125,
++    {VSYS_STD_1080P_60, 16, 14850, 60, 2200, 1125,
+         {88, 0, 44, 4, 5}, {192, 41, 1920, 1080}},
+-    {VSYS_STD_1080P_50, 16, 7425, 50, 2640, 1125,
++    {VSYS_STD_1080P_50, 16, 14850, 50, 2640, 1125,
+         {528, 0, 44, 4, 5}, {192, 41, 1920, 1080}},
+-    {VSYS_STD_1080P_60, 16, 14850, 60, 2200, 1125,
++    {VSYS_STD_1080P_30, 34, 7425, 30, 2200, 1125,
+         {88, 0, 44, 4, 5}, {192, 41, 1920, 1080}},
++    {VSYS_STD_1080P_25, 34, 7425, 25, 2640, 1125,
++        {528, 0, 44, 4, 5}, {192, 41, 1920, 1080}},
++    {VSYS_STD_1080P_24, 34, 7425, 24, 2750, 1125,
++        {638, 0, 44, 4, 5}, {192, 41, 1920, 1080}},
+     {VSYS_STD_1080I_60, 5, 7425, 60, 2200, 1125,
+-        {88, 564, 44, 2, 5}, {192, 20, 1920, 540}},
++        {88, 1100, 44, 2, 5}, {192, 20, 1920, 540}},
+     {VSYS_STD_1080I_50, 20, 7425, 50, 2640, 1125,
+-        {528, 564, 44, 2, 5}, {192, 20, 1920, 540}},
++        {528, 1100, 44, 2, 5}, {192, 20, 1920, 540}},
++    {VSYS_STD_720P_60, 4, 7425, 60, 1650, 750,
++        {110, 0, 40, 5, 5}, {260, 25, 1280, 720}},
++    {VSYS_STD_720P_50, 19, 7425, 50, 1980, 750,
++        {440, 0, 40, 5, 5}, {260, 25, 1280, 720}},
++    {VSYS_STD_720P_30, 19, 7425, 30, 3300, 750,
++        {1760, 0, 40, 5, 5}, {260, 25, 1280, 720}},
++    {VSYS_STD_720P_25, 19, 7425, 25, 3960, 750,
++        {2420, 0, 40, 5, 5}, {260, 25, 1280, 720}},
++    {VSYS_STD_720P_24, 19, 7425, 24, 4125, 750,
++        {2585, 0, 40, 5, 5}, {260, 25, 1280, 720}},
++    {VSYS_STD_576P, 18, 2700, 50, 864, 625,
++        {12, 0, 64, 5, 5}, {132, 44, 720, 576}},
++    {VSYS_STD_576P_25, 18, 2700, 25, 1728, 625,
++        {876, 0, 64, 5, 5}, {132, 44, 720, 576}},
++    {VSYS_STD_576I, 18, 2700, 25, 1728, 625,
++        {24, 0, 138, 2, 3}, {264, 22, 720, 576}},
++    {VSYS_STD_480P, 3, 2700, 60, 858, 525,
++        {16, 0, 62, 9, 6}, {122, 36, 720, 480}},
++    {VSYS_STD_480P_30, 3, 2700, 30, 1716, 525,
++        {874, 0, 62, 9, 6}, {122, 36, 720, 480}},
++    {VSYS_STD_480I, 3, 2700, 30, 1716, 525,
++        {38, 0, 114, 4, 15}, {238, 18, 720, 480}},
++
++    {VSYS_STD_WUXGA_60, 0x0, 19325, 60, 2592, 1245,
++        {136, 0, 200, 3, 6}, {672, 45, 1920, 1200}},
++    {VSYS_STD_UXGA_60, 0x0, 16200, 60, 2160,1250 ,
++        {64, 0x0, 192, 1, 3}, {560, 50, 1600, 1200}},
++    {VSYS_STD_WSXGAP_60, 0x0, 14625, 60, 2240,1089 ,
++        {104, 0x0, 176, 3, 6}, {456, 36, 1680, 1050}},
++    {VSYS_STD_SXGAP_60, 0x0, 12175, 60, 1864,1089 ,
++        {88, 0x0, 144, 3, 4}, {376, 36, 1400, 1050}},
++    {VSYS_STD_1360_768_60, 0x0, 8550, 60, 1792, 795,
++        {64, 0x0, 112, 3, 6}, {432, 27, 1360, 768}},
++    {VSYS_STD_SXGA_60, 0x0, 10800, 60, 1688, 1066,
++        {6, 0x0, 14, 1, 3}, {45, 41, 1280, 1024}},
++    {VSYS_STD_WXGA_60, 0x0, 7950, 60, 1664, 798,
++         {64, 0x0, 128, 3, 7}, {320, 27, 1280, 768}},
++    {VSYS_STD_XGA_60, 0x0, 6500, 60, 1344, 806,
++        {24, 0x0, 136, 3, 6}, {296, 35, 1024, 768}},
++    {VSYS_STD_SVGA_60, 0x0, 4000, 60, 1056, 628,
++        {40, 0x0, 128, 1, 4}, {216, 27, 800, 600}},
++    {VSYS_STD_WVGA_60, 0x0, 3350, 60, 1063, 513,
++        {164, 0x0, 10, 10, 10}, {99, 33, 800, 480}},
++    {VSYS_STD_VGA_60, 0x0, 2518, 60, 800, 525,
++        {8, 0x0, 96, 2, 2}, {136, 33, 640, 480}}
+ };
+ 
+ #define DEVICE_SII9022A_MAX_MODES  (sizeof(SiI9022ModeInfo) /                     \
+diff --git a/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis.c b/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis.c
+index c4e5514..0e9eb5a 100755
+--- a/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis.c
++++ b/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis.c
+@@ -2006,6 +2006,7 @@ Int32 Vdis_setResolution(VDIS_DEV devId, UInt32 resolution)
+     }
+ #endif
+ 
++
+     /* Check for tied vencs */
+     if(!gVdisModuleContext.vdisConfig.tiedDevicesMask) {
+ 
+@@ -2022,17 +2023,77 @@ Int32 Vdis_setResolution(VDIS_DEV devId, UInt32 resolution)
+                     case VSYS_STD_1080P_50:
+                         Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_1080P_50);
+                     break;
++                    case VSYS_STD_1080P_30:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_1080P_30);
++                    break;
++                    case VSYS_STD_1080P_25:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_1080P_25);
++                    break;
++                    case VSYS_STD_1080P_24:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_1080P_24);
++                    break;
++                    case VSYS_STD_1080I_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_1080I_60);
++                    break;
++                    case VSYS_STD_1080I_50:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_1080I_50);
++                    break;
+                     case VSYS_STD_720P_60:
+                         Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_720P_60);
+                     break;
++                    case VSYS_STD_720P_50:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_720P_50);
++                    break;
++                    case VSYS_STD_720P_30:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_720P_30);
++                    break;
++                    case VSYS_STD_720P_25:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_720P_25);
++                    break;
++                    case VSYS_STD_720P_24:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_720P_24);
++                    break;
++                    case VSYS_STD_480P:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_480P);
++                    break;
++                    case VSYS_STD_480P_30:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_480P_30);
++                    break;
++                    case VSYS_STD_576P:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_576P);
++                    break;
++                    case VSYS_STD_576P_25:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_576P_25);
++                    break;
++                    case VSYS_STD_WUXGA_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_WUXGA_60);
++                    break;
++                    case VSYS_STD_UXGA_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_UXGA_60);
++                    break;
++                    case VSYS_STD_WSXGAP_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_WSXGAP_60);
++                    break;
++                    case VSYS_STD_SXGAP_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_SXGAP_60);
++                    break;
++                    case VSYS_STD_1360_768_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_1360_768_60);
++                    break;
++                    case VSYS_STD_WXGA_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_WXGA_60);
++                    break;
+                     case VSYS_STD_XGA_60:
+                         Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_XGA_60);
+                     break;
+                     case VSYS_STD_SXGA_60:
+                         Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_SXGA_60);
+                     break;
++                    case VSYS_STD_SVGA_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_SVGA_60);
++                    break;
+                     case VSYS_STD_VGA_60:
+-                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_VGA_CEA);
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_VGA_60);
+                     break;
+                     default:
+                         printf("\n Resolution not supported for HDMI!! \n");
+@@ -2052,15 +2113,78 @@ Int32 Vdis_setResolution(VDIS_DEV devId, UInt32 resolution)
+                     case VSYS_STD_1080P_50:
+                         Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP,  VDIS_TIMINGS_1080P_50);
+                     break;
++                    case VSYS_STD_1080P_30:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP,  VDIS_TIMINGS_1080P_30);
++                    break;
++                    case VSYS_STD_1080P_25:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP,  VDIS_TIMINGS_1080P_25);
++                    break;
++                    case VSYS_STD_1080P_24:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP,  VDIS_TIMINGS_1080P_24);
++                    break;
++                    case VSYS_STD_1080I_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP,  VDIS_TIMINGS_1080I_60);
++                    break;
++                    case VSYS_STD_1080I_50:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP,  VDIS_TIMINGS_1080I_50);
++                    break;
+                     case VSYS_STD_720P_60:
+                         Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP,  VDIS_TIMINGS_720P_60);
+                     break;
++                    case VSYS_STD_720P_50:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP,  VDIS_TIMINGS_720P_50);
++                    break;
++                    case VSYS_STD_720P_30:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP,  VDIS_TIMINGS_720P_30);
++                    break;
++                    case VSYS_STD_720P_25:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP,  VDIS_TIMINGS_720P_25);
++                    break;
++                    case VSYS_STD_720P_24:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP,  VDIS_TIMINGS_720P_24);
++                    break;
++                    case VSYS_STD_480P:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP,  VDIS_TIMINGS_480P);
++                    break;
++                    case VSYS_STD_480P_30:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP,  VDIS_TIMINGS_480P_30);
++                    break;
++                    case VSYS_STD_576P:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP,  VDIS_TIMINGS_576P);
++                    break;
++                    case VSYS_STD_576P_25:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP,  VDIS_TIMINGS_576P_25);
++                    break;
++                    case VSYS_STD_WUXGA_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP,  VDIS_TIMINGS_WUXGA_60);
++                    break;
++                    case VSYS_STD_UXGA_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP,  VDIS_TIMINGS_UXGA_60);
++                    break;
++                    case VSYS_STD_WSXGAP_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP,  VDIS_TIMINGS_WSXGAP_60);
++                    break;
++                    case VSYS_STD_SXGAP_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP,  VDIS_TIMINGS_SXGAP_60);
++                    break;
++                    case VSYS_STD_1360_768_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP,  VDIS_TIMINGS_1360_768_60);
++                    break;
++                    case VSYS_STD_WXGA_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP,  VDIS_TIMINGS_WXGA_60);
++                    break;
+                     case VSYS_STD_XGA_60:
+                         Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP,  VDIS_TIMINGS_XGA_60);
+                     break;
+                     case VSYS_STD_SXGA_60:
+                         Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP,  VDIS_TIMINGS_SXGA_60);
+                     break;
++                    case VSYS_STD_SVGA_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP,  VDIS_TIMINGS_SVGA_60);
++                    break;
++                    case VSYS_STD_VGA_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP,  VDIS_TIMINGS_VGA_60);
++                    break;
+                     default:
+                         printf("\n Resolution not supported for HDCOMP!! \n");
+                     break;
+@@ -2077,15 +2201,78 @@ Int32 Vdis_setResolution(VDIS_DEV devId, UInt32 resolution)
+                     case VSYS_STD_1080P_50:
+                         Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_1080P_50);
+                     break;
++                    case VSYS_STD_1080P_30:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_1080P_30);
++                    break;
++                    case VSYS_STD_1080P_25:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_1080P_25);
++                    break;
++                    case VSYS_STD_1080P_24:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_1080P_24);
++                    break;
++                    case VSYS_STD_1080I_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_1080I_60);
++                    break;
++                    case VSYS_STD_1080I_50:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_1080I_50);
++                    break;
+                     case VSYS_STD_720P_60:
+                         Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_720P_60);
+                     break;
++                    case VSYS_STD_720P_50:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_720P_50);
++                    break;
++                    case VSYS_STD_720P_30:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_720P_30);
++                    break;
++                    case VSYS_STD_720P_25:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_720P_25);
++                    break;
++                    case VSYS_STD_720P_24:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_720P_24);
++                    break;
++                    case VSYS_STD_480P:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_480P);
++                    break;
++                    case VSYS_STD_480P_30:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_480P_30);
++                    break;
++                    case VSYS_STD_576P:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_576P);
++                    break;
++                    case VSYS_STD_576P_25:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_576P_25);
++                    break;
++                    case VSYS_STD_WUXGA_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_WUXGA_60);
++                    break;
++                    case VSYS_STD_UXGA_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_UXGA_60);
++                    break;
++                    case VSYS_STD_WSXGAP_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_WSXGAP_60);
++                    break;
++                    case VSYS_STD_SXGAP_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_SXGAP_60);
++                    break;
++                    case VSYS_STD_1360_768_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_1360_768_60);
++                    break;
++                    case VSYS_STD_WXGA_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_WXGA_60);
++                    break;
+                     case VSYS_STD_XGA_60:
+                         Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_XGA_60);
+                     break;
+                     case VSYS_STD_SXGA_60:
+                         Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_SXGA_60);
+                     break;
++                    case VSYS_STD_SVGA_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_SVGA_60);
++                    break;
++                    case VSYS_STD_VGA_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_VGA_60);
++                    break;
+                     default:
+                         printf("\n Resolution not supported for DVO2!! \n");
+                     break;
+@@ -2115,10 +2302,86 @@ Int32 Vdis_setResolution(VDIS_DEV devId, UInt32 resolution)
+                     Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_1080P_50);
+                     Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_1080P_50);
+                 break;
++                case VSYS_STD_1080P_30:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_1080P_30);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_1080P_30);
++                break;
++                case VSYS_STD_1080P_25:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_1080P_25);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_1080P_25);
++                break;
++                case VSYS_STD_1080P_24:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_1080P_24);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_1080P_24);
++                break;
++                case VSYS_STD_1080I_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_1080I_60);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_1080I_60);
++                break;
++                case VSYS_STD_1080I_50:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_1080I_50);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_1080I_50);
++                break;
+                 case VSYS_STD_720P_60:
+                     Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_720P_60);
+                     Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_720P_60);
+                 break;
++                case VSYS_STD_720P_50:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_720P_50);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_720P_50);
++                break;
++                case VSYS_STD_720P_30:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_720P_30);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_720P_30);
++                break;
++                case VSYS_STD_720P_25:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_720P_25);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_720P_25);
++                break;
++                case VSYS_STD_720P_24:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_720P_24);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_720P_24);
++                break;
++                case VSYS_STD_480P:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_480P);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_480P);
++                break;
++                case VSYS_STD_480P_30:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_480P_30);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_480P_30);
++                break;
++                case VSYS_STD_576P:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_576P);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_576P);
++                break;
++                case VSYS_STD_576P_25:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_576P_25);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_576P_25);
++                break;
++                case VSYS_STD_WUXGA_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_WUXGA_60);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_WUXGA_60);
++                break;
++                case VSYS_STD_UXGA_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_UXGA_60);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_UXGA_60);
++                break;
++                case VSYS_STD_WSXGAP_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_WSXGAP_60);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_WSXGAP_60);
++                break;
++                case VSYS_STD_SXGAP_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_SXGAP_60);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_SXGAP_60);
++                break;
++                case VSYS_STD_1360_768_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_1360_768_60);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_1360_768_60);
++                break;
++                case VSYS_STD_WXGA_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_WXGA_60);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_WXGA_60);
++                break;
+                 case VSYS_STD_XGA_60:
+                     Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_XGA_60);
+                     Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_XGA_60);
+@@ -2127,9 +2390,13 @@ Int32 Vdis_setResolution(VDIS_DEV devId, UInt32 resolution)
+                     Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_SXGA_60);
+                     Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_SXGA_60);
+                 break;
++                case VSYS_STD_SVGA_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_SVGA_60);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_SVGA_60);
++                break;
+                 case VSYS_STD_VGA_60:
+-                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_VGA_CEA);
+-                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_VGA_CEA);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_VGA_60);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_VGA_60);
+                 break;
+                 default:
+                     printf("\n Resolution not supported for this Venc!! \n");
+@@ -2165,10 +2432,86 @@ Int32 Vdis_setResolution(VDIS_DEV devId, UInt32 resolution)
+                     Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,   VDIS_TIMINGS_1080P_50);
+                     Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_1080P_50);
+                 break;
++                case VSYS_STD_1080P_30:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,   VDIS_TIMINGS_1080P_30);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_1080P_30);
++                break;
++                case VSYS_STD_1080P_25:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,   VDIS_TIMINGS_1080P_25);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_1080P_25);
++                break;
++                case VSYS_STD_1080P_24:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,   VDIS_TIMINGS_1080P_24);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_1080P_24);
++                break;
++                case VSYS_STD_1080I_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,   VDIS_TIMINGS_1080I_60);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_1080I_60);
++                break;
++                case VSYS_STD_1080I_50:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,   VDIS_TIMINGS_1080I_50);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_1080I_50);
++                break;
+                 case VSYS_STD_720P_60:
+                     Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,   VDIS_TIMINGS_720P_60);
+                     Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_720P_60);
+                 break;
++                case VSYS_STD_720P_50:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,   VDIS_TIMINGS_720P_50);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_720P_50);
++                break;
++                case VSYS_STD_720P_30:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,   VDIS_TIMINGS_720P_30);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_720P_30);
++                break;
++                case VSYS_STD_720P_25:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,   VDIS_TIMINGS_720P_25);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_720P_25);
++                break;
++                case VSYS_STD_720P_24:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,   VDIS_TIMINGS_720P_24);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_720P_24);
++                break;
++                case VSYS_STD_480P:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,   VDIS_TIMINGS_480P);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_480P);
++                break;
++                case VSYS_STD_480P_30:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,   VDIS_TIMINGS_480P_30);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_480P_30);
++                break;
++                case VSYS_STD_576P:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,   VDIS_TIMINGS_576P);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_576P);
++                break;
++                case VSYS_STD_576P_25:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,   VDIS_TIMINGS_576P_25);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_576P_25);
++                break;
++                case VSYS_STD_WUXGA_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,   VDIS_TIMINGS_WUXGA_60);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_WUXGA_60);
++                break;
++                case VSYS_STD_UXGA_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,   VDIS_TIMINGS_UXGA_60);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_UXGA_60);
++                break;
++                case VSYS_STD_WSXGAP_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,   VDIS_TIMINGS_WSXGAP_60);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_WSXGAP_60);
++                break;
++                case VSYS_STD_SXGAP_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,   VDIS_TIMINGS_SXGAP_60);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_SXGAP_60);
++                break;
++                case VSYS_STD_1360_768_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,   VDIS_TIMINGS_1360_768_60);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_1360_768_60);
++                break;
++                case VSYS_STD_WXGA_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,   VDIS_TIMINGS_WXGA_60);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_WXGA_60);
++                break;
+                 case VSYS_STD_XGA_60:
+                     Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,   VDIS_TIMINGS_XGA_60);
+                     Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_XGA_60);
+@@ -2177,9 +2520,13 @@ Int32 Vdis_setResolution(VDIS_DEV devId, UInt32 resolution)
+                     Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,   VDIS_TIMINGS_SXGA_60);
+                     Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_SXGA_60);
+                 break;
++                case VSYS_STD_SVGA_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,   VDIS_TIMINGS_SVGA_60);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_SVGA_60);
++                break;
+                 case VSYS_STD_VGA_60:
+-                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_VGA_CEA);
+-                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_VGA_CEA);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_VGA_60);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_VGA_60);
+                 break;
+                 default:
+                     printf("\n Resolution not supported for this Venc!! \n");
+@@ -2218,26 +2565,102 @@ Int32 Vdis_setResolution(VDIS_DEV devId, UInt32 resolution)
+                     Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_1080P_50);
+                     Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2  , VDIS_TIMINGS_1080P_50);
+                 break;
++                case VSYS_STD_1080P_30:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_1080P_30);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2  , VDIS_TIMINGS_1080P_30);
++                break;
++                case VSYS_STD_1080P_25:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_1080P_25);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2  , VDIS_TIMINGS_1080P_25);
++                break;
++                case VSYS_STD_1080P_24:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_1080P_24);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2  , VDIS_TIMINGS_1080P_24);
++                break;
++                case VSYS_STD_1080I_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_1080I_60);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2  , VDIS_TIMINGS_1080I_60);
++                break;
++                case VSYS_STD_1080I_50:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_1080I_50);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2  , VDIS_TIMINGS_1080I_50);
++                break;
+                 case VSYS_STD_720P_60:
+                     Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_720P_60);
+                     Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2  , VDIS_TIMINGS_720P_60);
+                 break;
+-                case VSYS_STD_XGA_60:
+-                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_XGA_60);
+-                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2  , VDIS_TIMINGS_XGA_60);
++                case VSYS_STD_720P_50:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_720P_50);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2  , VDIS_TIMINGS_720P_50);
+                 break;
+-                case VSYS_STD_SXGA_60:
+-                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_SXGA_60);
+-                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2  , VDIS_TIMINGS_SXGA_60);
++                case VSYS_STD_720P_30:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_720P_30);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2  , VDIS_TIMINGS_720P_30);
++                break;
++                case VSYS_STD_720P_25:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_720P_25);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2  , VDIS_TIMINGS_720P_25);
++                break;
++                case VSYS_STD_720P_24:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_720P_24);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2  , VDIS_TIMINGS_720P_24);
+                 break;
+                 case VSYS_STD_480P:
+                     Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_480P);
+                     Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2  , VDIS_TIMINGS_480P);
+                 break;
++                case VSYS_STD_480P_30:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_480P_30);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2  , VDIS_TIMINGS_480P_30);
++                break;
+                 case VSYS_STD_576P:
+                     Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_576P);
+                     Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2  , VDIS_TIMINGS_576P);
+                 break;
++                case VSYS_STD_576P_25:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_576P_25);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2  , VDIS_TIMINGS_576P_25);
++                break;
++                case VSYS_STD_WUXGA_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_WUXGA_60);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2  , VDIS_TIMINGS_WUXGA_60);
++                break;
++                case VSYS_STD_UXGA_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_UXGA_60);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2  , VDIS_TIMINGS_UXGA_60);
++                break;
++                case VSYS_STD_WSXGAP_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_WSXGAP_60);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2  , VDIS_TIMINGS_WSXGAP_60);
++                break;
++                case VSYS_STD_SXGAP_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_SXGAP_60);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2  , VDIS_TIMINGS_SXGAP_60);
++                break;
++                case VSYS_STD_1360_768_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_1360_768_60);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2  , VDIS_TIMINGS_1360_768_60);
++                break;
++                case VSYS_STD_WXGA_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_WXGA_60);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2  , VDIS_TIMINGS_WXGA_60);
++                break;
++                case VSYS_STD_XGA_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_XGA_60);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2  , VDIS_TIMINGS_XGA_60);
++                break;
++                case VSYS_STD_SXGA_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_SXGA_60);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2  , VDIS_TIMINGS_SXGA_60);
++                break;
++                case VSYS_STD_SVGA_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_SVGA_60);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2  , VDIS_TIMINGS_SVGA_60);
++                break;
++                case VSYS_STD_VGA_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_VGA_60);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2  , VDIS_TIMINGS_VGA_60);
++                break;
+                 default:
+                     printf("\n Resolution not supported for this Venc!! \n");
+                 break;
+@@ -2263,23 +2686,77 @@ Int32 Vdis_setResolution(VDIS_DEV devId, UInt32 resolution)
+                 case VSYS_STD_1080P_50:
+                     Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_1080P_50);
+                 break;
++                case VSYS_STD_1080P_30:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_1080P_30);
++                break;
++                case VSYS_STD_1080P_25:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_1080P_25);
++                break;
++                case VSYS_STD_1080P_24:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_1080P_24);
++                break;
++                case VSYS_STD_1080I_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_1080I_60);
++                break;
++                case VSYS_STD_1080I_50:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_1080I_50);
++                break;
+                 case VSYS_STD_720P_60:
+                     Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_720P_60);
+                 break;
+-                case VSYS_STD_XGA_60:
+-                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_XGA_60);
++                case VSYS_STD_720P_50:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_720P_50);
+                 break;
+-                case VSYS_STD_SXGA_60:
+-                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_SXGA_60);
++                case VSYS_STD_720P_30:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_720P_30);
++                break;
++                case VSYS_STD_720P_25:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_720P_25);
++                break;
++                case VSYS_STD_720P_24:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_720P_24);
+                 break;
+                 case VSYS_STD_480P:
+                      Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI  , VDIS_TIMINGS_480P);
+                 break;
++                case VSYS_STD_480P_30:
++                     Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI  , VDIS_TIMINGS_480P_30);
++                break;
+                 case VSYS_STD_576P:
+                     Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI  , VDIS_TIMINGS_576P);
+                 break;
++                case VSYS_STD_576P_25:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI  , VDIS_TIMINGS_576P_25);
++                break;
++                case VSYS_STD_WUXGA_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_WUXGA_60);
++                break;
++                case VSYS_STD_UXGA_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_UXGA_60);
++                break;
++                case VSYS_STD_WSXGAP_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_WSXGAP_60);
++                break;
++                case VSYS_STD_SXGAP_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_SXGAP_60);
++                break;
++                case VSYS_STD_1360_768_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_1360_768_60);
++                break;
++                case VSYS_STD_WXGA_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_WXGA_60);
++                break;
++                case VSYS_STD_XGA_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_XGA_60);
++                break;
++                case VSYS_STD_SXGA_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_SXGA_60);
++                break;
++                case VSYS_STD_SVGA_60:
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_SVGA_60);
++                break;
+                 case VSYS_STD_VGA_60:
+-                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_VGA_CEA);
++                    Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_VGA_60);
+                 break;
+                 default:
+                     printf("\n Resolution not supported for HDMI!! \n");
+@@ -2314,29 +2791,101 @@ Int32 Vdis_setResolution(VDIS_DEV devId, UInt32 resolution)
+                         Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_1080P_50);
+                         Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI  , VDIS_TIMINGS_1080P_50);
+                     break;
++                    case VSYS_STD_1080P_30:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_1080P_30);
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI  , VDIS_TIMINGS_1080P_30);
++                    break;
++                    case VSYS_STD_1080P_25:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_1080P_25);
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI  , VDIS_TIMINGS_1080P_25);
++                    break;
++                    case VSYS_STD_1080P_24:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_1080P_24);
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI  , VDIS_TIMINGS_1080P_24);
++                    break;
++                    case VSYS_STD_1080I_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_1080I_60);
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI  , VDIS_TIMINGS_1080I_60);
++                    break;
++                    case VSYS_STD_1080I_50:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_1080I_50);
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI  , VDIS_TIMINGS_1080I_50);
++                    break;
+                     case VSYS_STD_720P_60:
+                         Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_720P_60);
+                         Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI  , VDIS_TIMINGS_720P_60);
+                     break;
+-                    case VSYS_STD_XGA_60:
+-                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_XGA_60);
+-                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI  , VDIS_TIMINGS_XGA_60);
++                    case VSYS_STD_720P_50:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_720P_50);
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI  , VDIS_TIMINGS_720P_50);
+                     break;
+-                    case VSYS_STD_SXGA_60:
+-                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_SXGA_60);
+-                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI  , VDIS_TIMINGS_SXGA_60);
++                    case VSYS_STD_720P_30:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_720P_30);
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI  , VDIS_TIMINGS_720P_30);
++                    break;
++                    case VSYS_STD_720P_25:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_720P_25);
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI  , VDIS_TIMINGS_720P_25);
++                    break;
++                    case VSYS_STD_720P_24:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_720P_24);
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI  , VDIS_TIMINGS_720P_24);
+                     break;
+                     case VSYS_STD_480P:
+                         Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_480P);
+                         Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI  , VDIS_TIMINGS_480P);
+                     break;
++                    case VSYS_STD_480P_30:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_480P_30);
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI  , VDIS_TIMINGS_480P_30);
++                    break;
+                     case VSYS_STD_576P:
+                         Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_576P);
+                         Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI  , VDIS_TIMINGS_576P);
+                     break;
++                    case VSYS_STD_576P_25:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_576P_25);
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI  , VDIS_TIMINGS_576P_25);
++                    break;
++                    case VSYS_STD_WUXGA_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_WUXGA_60);
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI  , VDIS_TIMINGS_WUXGA_60);
++                    break;
++                    case VSYS_STD_UXGA_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_UXGA_60);
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI  , VDIS_TIMINGS_UXGA_60);
++                    break;
++                    case VSYS_STD_WSXGAP_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_WSXGAP_60);
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI  , VDIS_TIMINGS_WSXGAP_60);
++                    break;
++                    case VSYS_STD_SXGAP_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_SXGAP_60);
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI  , VDIS_TIMINGS_SXGAP_60);
++                    break;
++                    case VSYS_STD_1360_768_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_1360_768_60);
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI  , VDIS_TIMINGS_1360_768_60);
++                    break;
++                    case VSYS_STD_WXGA_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_WXGA_60);
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI  , VDIS_TIMINGS_WXGA_60);
++                    break;
++                    case VSYS_STD_XGA_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_XGA_60);
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI  , VDIS_TIMINGS_XGA_60);
++                    break;
++                    case VSYS_STD_SXGA_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_SXGA_60);
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI  , VDIS_TIMINGS_SXGA_60);
++                    break;
++                    case VSYS_STD_SVGA_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_SVGA_60);
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_SVGA_60);
++                    break;
+                     case VSYS_STD_VGA_60:
+-                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_VGA_CEA);
+-                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_VGA_CEA);
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDCOMP, VDIS_TIMINGS_VGA_60);
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_HDMI,  VDIS_TIMINGS_VGA_60);
+                     break;
+                     default:
+                         printf("\n Resolution not supported for HDMI!! \n");
+@@ -2364,21 +2913,78 @@ Int32 Vdis_setResolution(VDIS_DEV devId, UInt32 resolution)
+                     case VSYS_STD_1080P_50:
+                         Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_1080P_50);
+                     break;
++                    case VSYS_STD_1080P_30:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_1080P_30);
++                    break;
++                    case VSYS_STD_1080P_25:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_1080P_25);
++                    break;
++                    case VSYS_STD_1080P_24:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_1080P_24);
++                    break;
++                    case VSYS_STD_1080I_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_1080I_60);
++                    break;
++                    case VSYS_STD_1080I_50:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_1080I_50);
++                    break;
+                     case VSYS_STD_720P_60:
+                         Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_720P_60);
+                     break;
+-                    case VSYS_STD_XGA_60:
+-                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_XGA_60);
++                    case VSYS_STD_720P_50:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_720P_50);
+                     break;
+-                    case VSYS_STD_SXGA_60:
+-                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_SXGA_60);
++                    case VSYS_STD_720P_30:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_720P_30);
++                    break;
++                    case VSYS_STD_720P_25:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_720P_25);
++                    break;
++                    case VSYS_STD_720P_24:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_720P_24);
+                     break;
+                     case VSYS_STD_480P:
+                          Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2  , VDIS_TIMINGS_480P);
+                     break;
++                    case VSYS_STD_480P_30:
++                         Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2  , VDIS_TIMINGS_480P_30);
++                    break;
+                     case VSYS_STD_576P:
+                         Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2  , VDIS_TIMINGS_576P);
+                     break;
++                    case VSYS_STD_576P_25:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2  , VDIS_TIMINGS_576P_25);
++                    break;
++                    case VSYS_STD_WUXGA_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_WUXGA_60);
++                    break;
++                    case VSYS_STD_UXGA_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_UXGA_60);
++                    break;
++                    case VSYS_STD_WSXGAP_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_WSXGAP_60);
++                    break;
++                    case VSYS_STD_SXGAP_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_SXGAP_60);
++                    break;
++                    case VSYS_STD_1360_768_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_1360_768_60);
++                    break;
++                    case VSYS_STD_WXGA_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_WXGA_60);
++                    break;
++                    case VSYS_STD_XGA_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_XGA_60);
++                    break;
++                    case VSYS_STD_SXGA_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_SXGA_60);
++                    break;
++                    case VSYS_STD_SVGA_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_SVGA_60);
++                    break;
++                    case VSYS_STD_VGA_60:
++                        Vdis_sysfsCmd(3,VDIS_SYSFSCMD_SETTIMINGS, VDIS_SYSFS_DVO2,  VDIS_TIMINGS_VGA_60);
++                    break;
+                     default:
+                         printf("\n Resolution not supported for DVO2!! \n");
+                     break;
+diff --git a/ti_tools/hdvpss/dvr_rdk_hdvpss/packages/ti/psp/vps/drivers/src/fvid2_drvMgr.c b/ti_tools/hdvpss/dvr_rdk_hdvpss/packages/ti/psp/vps/drivers/src/fvid2_drvMgr.c
+index 8833d93..d66dd3b 100755
+--- a/ti_tools/hdvpss/dvr_rdk_hdvpss/packages/ti/psp/vps/drivers/src/fvid2_drvMgr.c
++++ b/ti_tools/hdvpss/dvr_rdk_hdvpss/packages/ti/psp/vps/drivers/src/fvid2_drvMgr.c
+@@ -157,15 +157,21 @@ static FVID2_ModeInfo gFdmStdInfoTable[] =
+     {FVID2_STD_480I,             720u,  480u, FVID2_SF_INTERLACED,   27000u, 30u, 0u},
+     {FVID2_STD_576I,             720u,  576u, FVID2_SF_INTERLACED,   27000u, 25u, 0u},
+     {FVID2_STD_480P,             720u,  480u, FVID2_SF_PROGRESSIVE,  27000u, 60u, 0u},
++    {FVID2_STD_480P_30,          720u,  480u, FVID2_SF_PROGRESSIVE,  27000u, 30u, 0u},
+     {FVID2_STD_576P,             720u,  576u, FVID2_SF_PROGRESSIVE,  27000u, 50u, 0u},
++    {FVID2_STD_576P_25,          720u,  576u, FVID2_SF_PROGRESSIVE,  27000u, 25u, 0u},
+     {FVID2_STD_720P_60,         1280u,  720u, FVID2_SF_PROGRESSIVE,  74250u, 60u, 0u},
+     {FVID2_STD_720P_50,         1280u,  720u, FVID2_SF_PROGRESSIVE,  74250u, 50u, 0u},
++    {FVID2_STD_720P_30,         1280u,  720u, FVID2_SF_PROGRESSIVE,  74250u, 30u, 0u},
++    {FVID2_STD_720P_25,         1280u,  720u, FVID2_SF_PROGRESSIVE,  74250u, 25u, 0u},
++    {FVID2_STD_720P_24,         1280u,  720u, FVID2_SF_PROGRESSIVE,  74250u, 24u, 0u},
+     {FVID2_STD_1080I_60,        1920u, 1080u, FVID2_SF_INTERLACED,   74250u, 30u, 0u},
+     {FVID2_STD_1080I_50,        1920u, 1080u, FVID2_SF_INTERLACED,   74250u, 25u, 0u},
+     {FVID2_STD_1080P_60,        1920u, 1080u, FVID2_SF_PROGRESSIVE, 148500u, 60u, 0u},
+     {FVID2_STD_1080P_50,        1920u, 1080u, FVID2_SF_PROGRESSIVE, 148500u, 50u, 0u},
+-    {FVID2_STD_1080P_24,        1920u, 1080u, FVID2_SF_PROGRESSIVE,  74250u, 24u, 0u},
+     {FVID2_STD_1080P_30,        1920u, 1080u, FVID2_SF_PROGRESSIVE,  74250u, 30u, 0u},
++    {FVID2_STD_1080P_25,        1920u, 1080u, FVID2_SF_PROGRESSIVE,  74250u, 25u, 0u},
++    {FVID2_STD_1080P_24,        1920u, 1080u, FVID2_SF_PROGRESSIVE,  74250u, 24u, 0u},
+     {FVID2_STD_VGA_60,           640u,  480u, FVID2_SF_PROGRESSIVE,  25175u, 60u, 0u},
+     {FVID2_STD_VGA_72,           640u,  480u, FVID2_SF_PROGRESSIVE,  31500u, 72u, 0u},
+     {FVID2_STD_VGA_75,           640u,  480u, FVID2_SF_PROGRESSIVE,  31500u, 75u, 0u},
+@@ -180,7 +186,7 @@ static FVID2_ModeInfo gFdmStdInfoTable[] =
+     {FVID2_STD_XGA_70,          1024u,  768u, FVID2_SF_PROGRESSIVE,  75000u, 70u, 0u},
+     {FVID2_STD_XGA_75,          1024u,  768u, FVID2_SF_PROGRESSIVE,  78750u, 75u, 0u},
+     {FVID2_STD_XGA_85,          1024u,  768u, FVID2_SF_PROGRESSIVE,  94500u, 85u, 0u},
+-    {FVID2_STD_WXGA_60,         1280u,  768u, FVID2_SF_PROGRESSIVE,  68250u, 60u, 0u},
++    {FVID2_STD_WXGA_60,         1280u,  768u, FVID2_SF_PROGRESSIVE,  79500u, 60u, 0u},
+     {FVID2_STD_WXGA_75,         1280u,  768u, FVID2_SF_PROGRESSIVE, 102250u, 75u, 0u},
+     {FVID2_STD_WXGA_85,         1280u,  768u, FVID2_SF_PROGRESSIVE, 117500u, 85u, 0u},
+     {FVID2_STD_1440_900_60,     1440u,  900u, FVID2_SF_PROGRESSIVE, 106500u, 60u, 0u},
+@@ -193,7 +199,8 @@ static FVID2_ModeInfo gFdmStdInfoTable[] =
+     {FVID2_STD_WSXGAP_60,       1680u, 1050u, FVID2_SF_PROGRESSIVE, 146250u, 60u, 0u},
+     {FVID2_STD_SXGAP_60,        1400u, 1050u, FVID2_SF_PROGRESSIVE, 121750u, 60u, 0u},
+     {FVID2_STD_SXGAP_75,        1400u, 1050u, FVID2_SF_PROGRESSIVE, 156000u, 75u, 0u},
+-    {FVID2_STD_UXGA_60,         1600u, 1200u, FVID2_SF_PROGRESSIVE, 162000u, 60u, 0u}
++    {FVID2_STD_UXGA_60,         1600u, 1200u, FVID2_SF_PROGRESSIVE, 162000u, 60u, 0u},
++    {FVID2_STD_WUXGA_60,        1920u, 1200u, FVID2_SF_PROGRESSIVE, 193250u, 60u, 0u}
+ };
+ 
+ /** \brief Data format string table. */
+@@ -279,15 +286,21 @@ static Fdm_StdString gFdmStdStrTable[] =
+     {FVID2_STD_HALF_D1,                 "HALF_D1"                   },
+     {FVID2_STD_D1,                      "D1"                        },
+     {FVID2_STD_480P,                    "480P"                      },
++    {FVID2_STD_480P_30,                 "480P30"                    },
+     {FVID2_STD_576P,                    "576P"                      },
++    {FVID2_STD_576P_25,                 "576P25"                    },
+     {FVID2_STD_720P_60,                 "720P60"                    },
+     {FVID2_STD_720P_50,                 "720P50"                    },
++    {FVID2_STD_720P_30,                 "720P30"                    },
++    {FVID2_STD_720P_25,                 "720P25"                    },
++    {FVID2_STD_720P_24,                 "720P24"                    },
+     {FVID2_STD_1080I_60,                "1080I60"                   },
+     {FVID2_STD_1080I_50,                "1080I50"                   },
+     {FVID2_STD_1080P_60,                "1080P60"                   },
+     {FVID2_STD_1080P_50,                "1080P50"                   },
+-    {FVID2_STD_1080P_24,                "1080P24"                   },
+     {FVID2_STD_1080P_30,                "1080P30"                   },
++    {FVID2_STD_1080P_25,                "1080P25"                   },
++    {FVID2_STD_1080P_24,                "1080P24"                   },
+     {FVID2_STD_VGA_60,                  "VGA60"                     },
+     {FVID2_STD_VGA_72,                  "VGA72"                     },
+     {FVID2_STD_VGA_75,                  "VGA75"                     },
+@@ -316,6 +329,7 @@ static Fdm_StdString gFdmStdStrTable[] =
+     {FVID2_STD_SXGAP_60,                "SXGAP60"                   },
+     {FVID2_STD_SXGAP_75,                "SXGAP75"                   },
+     {FVID2_STD_UXGA_60,                 "UXGA60"                    },
++    {FVID2_STD_WUXGA_60,                "WUXGA60"                   },
+     {FVID2_STD_MUX_2CH_D1,              "MUX_2CH_D1"                },
+     {FVID2_STD_MUX_2CH_HALF_D1,         "MUX_2CH_HALF_D1"           },
+     {FVID2_STD_MUX_2CH_CIF,             "MUX_2CH_CIF"               },
+diff --git a/ti_tools/hdvpss/dvr_rdk_hdvpss/packages/ti/psp/vps/fvid2.h b/ti_tools/hdvpss/dvr_rdk_hdvpss/packages/ti/psp/vps/fvid2.h
+index 34c17b2..e6090dc 100755
+--- a/ti_tools/hdvpss/dvr_rdk_hdvpss/packages/ti/psp/vps/fvid2.h
++++ b/ti_tools/hdvpss/dvr_rdk_hdvpss/packages/ti/psp/vps/fvid2.h
+@@ -648,12 +648,12 @@ typedef enum
+     FVID2_STD_NTSC = 0u,
+     /**< 720x480 30FPS interlaced NTSC standard. */
+     FVID2_STD_PAL,
+-    /**< 720x576 30FPS interlaced PAL standard. */
++    /**< 720x576 25FPS interlaced PAL standard. */
+ 
+     FVID2_STD_480I,
+     /**< 720x480 30FPS interlaced SD standard. */
+     FVID2_STD_576I,
+-    /**< 720x576 30FPS interlaced SD standard. */
++    /**< 720x576 25FPS interlaced SD standard. */
+ 
+     FVID2_STD_CIF,
+     /**< Interlaced, 360x120 per field NTSC, 360x144 per field PAL. */
+@@ -664,28 +664,40 @@ typedef enum
+ 
+     FVID2_STD_480P,
+     /**< 720x480 60FPS progressive ED standard. */
++    FVID2_STD_480P_30,
++    /**< 720x480 30FPS progressive ED standard. */
+     FVID2_STD_576P,
+-    /**< 720x576 60FPS progressive ED standard. */
++    /**< 720x576 50FPS progressive ED standard. */
++    FVID2_STD_576P_25,
++    /**< 720x576 25FPS progressive ED standard. */
+ 
+     FVID2_STD_720P_60,
+     /**< 1280x720 60FPS progressive HD standard. */
+     FVID2_STD_720P_50,
+     /**< 1280x720 50FPS progressive HD standard. */
++    FVID2_STD_720P_30,
++    /**< 1280x720 30FPS progressive HD standard. */
++    FVID2_STD_720P_25,
++    /**< 1280x720 25FPS progressive HD standard. */
++    FVID2_STD_720P_24,
++    /**< 1280x720 24FPS progressive HD standard. */
+ 
+     FVID2_STD_1080I_60,
+     /**< 1920x1080 30FPS interlaced HD standard. */
+     FVID2_STD_1080I_50,
+-    /**< 1920x1080 50FPS interlaced HD standard. */
++    /**< 1920x1080 25FPS interlaced HD standard. */
+ 
+     FVID2_STD_1080P_60,
+     /**< 1920x1080 60FPS progressive HD standard. */
+     FVID2_STD_1080P_50,
+     /**< 1920x1080 50FPS progressive HD standard. */
+ 
+-    FVID2_STD_1080P_24,
+-    /**< 1920x1080 24FPS progressive HD standard. */
+     FVID2_STD_1080P_30,
+     /**< 1920x1080 30FPS progressive HD standard. */
++    FVID2_STD_1080P_25,
++    /**< 1920x1080 25FPS progressive HD standard. */
++    FVID2_STD_1080P_24,
++    /**< 1920x1080 24FPS progressive HD standard. */
+ 
+     /* Vesa standards from here Please add all SMTPE and CEA standard enums
+        above this only. this is to ensure proxy Oses compatibility
+@@ -758,6 +770,9 @@ typedef enum
+     FVID2_STD_UXGA_60,
+     /**< 1600x1200 60FPS VESA standard. */
+ 
++    FVID2_STD_WUXGA_60,
++    /**< 1920x1200 60FPS VESA standard. */
++
+     /* Multi channel standards from here Please add all VESA standards enums
+        above this only. this is to ensure proxy Oses compatibility */
+     FVID2_STD_MUX_2CH_D1 = 0x200,
+@@ -1671,6 +1686,7 @@ static inline Int32 FVID2_isStandardVesa(UInt32 standard)
+         case FVID2_STD_VGA_72:
+         case FVID2_STD_VGA_75:
+         case FVID2_STD_VGA_85:
++        case FVID2_STD_WVGA_60:
+         case FVID2_STD_SVGA_60:
+         case FVID2_STD_SVGA_72:
+         case FVID2_STD_SVGA_75:
+@@ -1688,7 +1704,9 @@ static inline Int32 FVID2_isStandardVesa(UInt32 standard)
+         case FVID2_STD_SXGA_85:
+         case FVID2_STD_SXGAP_60:
+         case FVID2_STD_SXGAP_75:
++        case FVID2_STD_WSXGAP_60:
+         case FVID2_STD_UXGA_60:
++        case FVID2_STD_WUXGA_60:
+             retVal = TRUE;
+             break;
+     }
+diff --git a/ti_tools/hdvpss/dvr_rdk_hdvpss/packages/ti/psp/vps/hal/src/vpshal_hdvenc.c b/ti_tools/hdvpss/dvr_rdk_hdvpss/packages/ti/psp/vps/hal/src/vpshal_hdvenc.c
+index adccfde..476c7bb 100755
+--- a/ti_tools/hdvpss/dvr_rdk_hdvpss/packages/ti/psp/vps/hal/src/vpshal_hdvenc.c
++++ b/ti_tools/hdvpss/dvr_rdk_hdvpss/packages/ti/psp/vps/hal/src/vpshal_hdvenc.c
+@@ -207,32 +207,66 @@ typedef struct
+ HdVenc_StdModeInfo HdVencStdModeInfo[] = {
+     {{FVID2_STD_1080P_60, 1920, 1080, FVID2_SF_PROGRESSIVE, 148500, 60,
+         88, 148, 44, 4, 36, 5}, 3, 8, 0},
+-    {{FVID2_STD_1080P_50, 1920, 1080, FVID2_SF_PROGRESSIVE, 74250, 50,
++    {{FVID2_STD_1080P_50, 1920, 1080, FVID2_SF_PROGRESSIVE, 148500, 50,
+         528, 148, 44, 4, 36, 5}, 3, 7, 0},
+     {{FVID2_STD_1080P_30, 1920, 1080, FVID2_SF_PROGRESSIVE, 74250, 30,
+         88, 148, 44, 4, 36, 5}, 3, 4, 0},
++    {{FVID2_STD_1080P_25, 1920, 1080, FVID2_SF_PROGRESSIVE, 74250, 25,
++        528, 148, 44, 4, 36, 5}, 3, 4, 0},
++    {{FVID2_STD_1080P_24, 1920, 1080, FVID2_SF_PROGRESSIVE, 74250, 24,
++        638, 148, 44, 4, 36, 5}, 3, 4, 0},
++    {{FVID2_STD_1080I_60, 1920, 1080, FVID2_SF_INTERLACED, 74250, 30,
++        88, 148, 44, 2, 15, 5}, 2, 4, 4},
++    {{FVID2_STD_1080I_50, 1920, 1080, FVID2_SF_INTERLACED, 74250, 25,
++        528, 148, 44, 2, 15, 5}, 2, 4, 4},
+     {{FVID2_STD_720P_60, 1280, 720, FVID2_SF_PROGRESSIVE, 74250, 60,
+         110, 220, 40, 5, 20, 5}, 3, 6, 0},
+     {{FVID2_STD_720P_50, 1280, 720, FVID2_SF_PROGRESSIVE, 74250, 50,
+         440, 220, 40, 5, 20, 5}, 3, 5, 0},
++    {{FVID2_STD_720P_30, 1280, 720, FVID2_SF_PROGRESSIVE, 74250, 30,
++        1760, 220, 40, 5, 20, 5}, 3, 5, 0},
++    {{FVID2_STD_720P_25, 1280, 720, FVID2_SF_PROGRESSIVE, 74250, 25,
++        2420, 220, 40, 5, 20, 5}, 3, 5, 0},
++    {{FVID2_STD_720P_24, 1280, 720, FVID2_SF_PROGRESSIVE, 74250, 24,
++        2585, 220, 40, 5, 20, 5}, 3, 5, 0},
++    {{FVID2_STD_480P, 720, 480, FVID2_SF_PROGRESSIVE, 27000, 60,
++        16, 60, 62, 9, 30, 6}, 1, 4, 4},
++    {{FVID2_STD_480P_30, 720, 480, FVID2_SF_PROGRESSIVE, 27000, 30,
++        874, 60, 62, 9, 30, 6}, 1, 4, 4},
++    {{FVID2_STD_576P, 720, 576, FVID2_SF_PROGRESSIVE, 27000, 50,
++        12, 68, 64, 5, 39, 5}, 5, 4, 4},
++    {{FVID2_STD_576P_25, 720, 576, FVID2_SF_PROGRESSIVE, 27000, 25,
++        876, 68, 64, 5, 39, 5}, 5, 4, 4},
++    {{FVID2_STD_480I, 1440, 240, FVID2_SF_INTERLACED, 27000, 30,
++        38, 124, 114, 4, 3, 16}, 0, 4, 4},
++    {{FVID2_STD_576I, 720, 576, FVID2_SF_INTERLACED, 27000, 25,
++        24, 126, 138, 2, 3, 19}, 5, 4, 4},
++    {{FVID2_STD_WUXGA_60, 1920, 1200, FVID2_SF_PROGRESSIVE, 193250, 60,
++        136, 336, 200, 3, 36, 6}, 3, 8, 0},
++    {{FVID2_STD_UXGA_60, 1600, 1200, FVID2_SF_PROGRESSIVE, 162000, 60,
++        64, 304, 192, 1, 46, 3}, 1, 9, 0},
++    {{FVID2_STD_WSXGAP_60, 1680, 1050, FVID2_SF_PROGRESSIVE, 146250, 60,
++        104, 280, 176, 3, 30, 6}, 3, 8, 0},
++    {{FVID2_STD_SXGAP_60, 1400, 1050, FVID2_SF_PROGRESSIVE, 121750, 60,
++        88, 232, 144, 3, 32, 4}, 3, 8, 0},
++    {{FVID2_STD_1360_768_60, 1360, 768, FVID2_SF_PROGRESSIVE, 85500, 60,
++        64, 256, 112, 3, 18, 6}, 1, 9, 0},
++    {{FVID2_STD_SXGA_60, 1280, 1024, FVID2_SF_PROGRESSIVE, 108000, 60,
++        48, 248, 112, 1, 38, 3}, 1, 8, 0},
++    {{FVID2_STD_WXGA_60, 1280, 768, FVID2_SF_PROGRESSIVE, 79500, 60,
++        64, 192, 128, 3, 20, 7}, 1, 8, 0},
+     {{FVID2_STD_XGA_60, 1024, 768, FVID2_SF_PROGRESSIVE, 65000, 60,
+         24, 160, 136, 3, 29, 6}, 1, 6, 0},
++    {{FVID2_STD_SVGA_60, 800, 600, FVID2_SF_PROGRESSIVE, 40000, 60,
++        40, 88, 128, 1, 23, 4}, 1, 9, 0},
++    {{FVID2_STD_WVGA_60, 800, 480, FVID2_SF_PROGRESSIVE, 33500, 60,
++        164, 89, 10, 10, 23, 10}, 1, 9, 0},
++    {{FVID2_STD_VGA_60, 640, 480, FVID2_SF_PROGRESSIVE, 25175, 60,
++        8, 40, 96, 2, 25, 2}, 3, 8, 0},
+     {{FVID2_STD_XGA_75, 1024, 768, FVID2_SF_PROGRESSIVE, 78750, 75,
+-        16, 176, 96, 1, 28, 3}, 1, 6, 0},
+-    {{FVID2_STD_SXGA_60, 1280, 1024, FVID2_SF_PROGRESSIVE, 108000, 60,
+-        48, 248, 112, 1, 38, 3}, 1, 8, 0},
++        16, 176, 96, 1, 28, 3}, 1, 8, 0},
+     {{FVID2_STD_SXGA_75, 1280, 1024, FVID2_SF_PROGRESSIVE, 135000, 75,
+         16, 248, 144, 1, 38, 3}, 1, 10, 0},
+-    {{FVID2_STD_UXGA_60, 1600, 1200, FVID2_SF_PROGRESSIVE, 162000, 60,
+-        64, 304, 192, 1, 46, 3}, 1, 9, 0},
+-    {{FVID2_STD_1080I_60, 1920, 1080, FVID2_SF_INTERLACED, 74250, 30,
+-        88, 148, 44, 2, 15, 5}, 2, 4, 4},
+-    {{FVID2_STD_1080I_50, 1920, 1080, FVID2_SF_INTERLACED, 74250, 30,
+-        528, 148, 44, 2, 15, 5}, 2, 4, 4},
+-    {{FVID2_STD_480P, 720, 480, FVID2_SF_PROGRESSIVE, 27000, 60,
+-        16, 60, 62, 9, 30, 6}, 1, 4, 4},
+-    {{FVID2_STD_576P, 720, 576, FVID2_SF_PROGRESSIVE, 27000, 50,
+-        12, 68, 64, 5, 39, 5}, 5, 4, 4},
+ };
+ 
+ struct
+-- 
+2.7.4
+
