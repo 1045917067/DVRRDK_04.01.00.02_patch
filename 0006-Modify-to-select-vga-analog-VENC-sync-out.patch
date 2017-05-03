@@ -1,0 +1,29 @@
+From 43a77959ccdbf21f7d42b303578b872c38ce1e41 Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Wed, 8 Jun 2016 17:26:41 +0800
+Subject: [PATCH 06/42] Modify to select vga analog VENC sync out.
+
+---
+ dvr_rdk/mcfw/src_bios6/links_m3vpss/system/system_dctrl.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/dvr_rdk/mcfw/src_bios6/links_m3vpss/system/system_dctrl.c b/dvr_rdk/mcfw/src_bios6/links_m3vpss/system/system_dctrl.c
+index afd9547..53a4cee 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_m3vpss/system/system_dctrl.c
++++ b/dvr_rdk/mcfw/src_bios6/links_m3vpss/system/system_dctrl.c
+@@ -646,6 +646,12 @@ Int32 System_displayCtrlInit(VDIS_PARAMS_S * pPrm)
+     retVal = System_platformSelectHdCompSyncSrc(SYSTEM_HDCOMP_SYNC_SRC_DVO1, 1);
+     UTILS_assert(retVal == FVID2_SOK);
+ #endif
++
++#if defined(TI_816X_BUILD)
++    /* Need to set this bit only for ti816x to select analog VENC sync out */
++    (* (volatile UInt32 *)0x48140724) = 0x00000006;
++#endif
++
+     retVal = FVID2_control(
+                  gSystem_objVpss.fvidDisplayCtrl,
+                  IOCTL_VPS_DCTRL_SET_CONFIG,
+-- 
+2.7.4
+
