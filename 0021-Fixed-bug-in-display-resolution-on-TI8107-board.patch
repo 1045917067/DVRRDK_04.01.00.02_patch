@@ -1,0 +1,37 @@
+From 8773b25465dfaa0b5fb5a1e1e21dc5fffa320aff Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Fri, 10 Jun 2016 18:12:10 +0800
+Subject: [PATCH 21/42] Fixed bug in display resolution on TI8107 board.
+
+---
+ .../src_bios6/links_m3vpss/system/system_dctrl_common.c    | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/dvr_rdk/mcfw/src_bios6/links_m3vpss/system/system_dctrl_common.c b/dvr_rdk/mcfw/src_bios6/links_m3vpss/system/system_dctrl_common.c
+index 568bbd1..7f37e05 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_m3vpss/system/system_dctrl_common.c
++++ b/dvr_rdk/mcfw/src_bios6/links_m3vpss/system/system_dctrl_common.c
+@@ -76,6 +76,20 @@ Int32 System_dispSetPixClk()
+     }
+ 
+     gSystem_objVpss.vpllCfg[SYSTEM_VPLL_OUTPUT_VENC_D].outputVenc = VPS_SYSTEM_VPLL_OUTPUT_VENC_D;
++
++    /*
++     *  Modified by: zzx.
++     *
++     *  Date       : Jan 13, 2014.
++     *
++     *  Description:
++     *
++     *      Fixed bug in display resolution on TI8107 board.
++     *
++     */
++#if defined(TI_8107_BUILD)
++    gSystem_objVpss.vpllCfg[SYSTEM_VPLL_OUTPUT_VENC_D].outputVenc = VPS_SYSTEM_VPLL_OUTPUT_HDMI;
++#endif
+     retVal = FVID2_control(gSystem_objVpss.systemDrvHandle,
+                            IOCTL_VPS_VID_SYSTEM_SET_VIDEO_PLL,
+                            &(gSystem_objVpss.vpllCfg[SYSTEM_VPLL_OUTPUT_VENC_D]), NULL);
+-- 
+2.7.4
+
