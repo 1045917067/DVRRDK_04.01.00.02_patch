@@ -1,0 +1,44 @@
+From 380a0ae9b22fbd67ecc30d05d0419fce374bbd41 Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Fri, 10 Jun 2016 18:10:59 +0800
+Subject: [PATCH 20/42] Fix bug in sclr scanformat.
+
+---
+ dvr_rdk/mcfw/src_bios6/links_m3vpss/sclr/sclrLink_drv.c | 14 +++++++++++++-
+ 1 file changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/dvr_rdk/mcfw/src_bios6/links_m3vpss/sclr/sclrLink_drv.c b/dvr_rdk/mcfw/src_bios6/links_m3vpss/sclr/sclrLink_drv.c
+index 7861fe8..b4b80df 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_m3vpss/sclr/sclrLink_drv.c
++++ b/dvr_rdk/mcfw/src_bios6/links_m3vpss/sclr/sclrLink_drv.c
+@@ -322,7 +322,7 @@ Int32 SclrLink_drvCreateOutObj(SclrLink_Obj * pObj)
+     pFormat->pitch[0]       = pChInfo->pitch[0];
+     pFormat->pitch[1]       = pChInfo->pitch[1];
+     pFormat->pitch[2]       = pChInfo->pitch[2];
+-    pFormat->scanFormat     = pChInfo->scanFormat;
++    //pFormat->scanFormat     = pChInfo->scanFormat;
+     pFormat->bpp            = FVID2_BPP_BITS16;
+     pFormat->reserved       = NULL;
+ 
+@@ -375,6 +375,18 @@ Int32 SclrLink_drvCreateOutObj(SclrLink_Obj * pObj)
+         pOutChInfo = &pObj->info.queInfo[0].chInfo[chId];
+ 
+         pFormat = &pObj->outObj.outFormat;
++
++		/*
++		 *  Modified by: zzx.
++		 *
++		 *  Date       : Jul 30, 2015.
++		 *
++		 *  Description:
++		 *
++		 *               Fixed bug in scanFormat.
++		 */
++
++		pFormat->scanFormat     = pInChInfo->scanFormat;
+         if (pObj->createArgs.tilerEnable)
+         {
+             pOutChInfo->memType = VPS_VPDMA_MT_TILEDMEM;
+-- 
+2.7.4
+
