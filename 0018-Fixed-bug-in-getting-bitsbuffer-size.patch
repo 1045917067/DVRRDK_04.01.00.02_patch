@@ -1,0 +1,39 @@
+From 5db97c83b8898b44deed6506fec3a2875bf8e932 Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Fri, 10 Jun 2016 18:08:53 +0800
+Subject: [PATCH 18/42] Fixed bug in getting bitsbuffer size.
+
+---
+ .../src_bios6/links_m3video/codec_utils/utils_encdec.h     | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/dvr_rdk/mcfw/src_bios6/links_m3video/codec_utils/utils_encdec.h b/dvr_rdk/mcfw/src_bios6/links_m3video/codec_utils/utils_encdec.h
+index 41df3fc..9d66a85 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_m3video/codec_utils/utils_encdec.h
++++ b/dvr_rdk/mcfw/src_bios6/links_m3video/codec_utils/utils_encdec.h
+@@ -441,8 +441,22 @@ static inline Bool Utils_encdecIsGopStart(UInt32 frameType, UInt32 contentType)
+  *  @brief Macro that returns max size of encoded bitbuffer for a given resolution
+  */
+ 
++/*
++ *  Modified by: zzx.
++ *
++ *  Date       : Jul 25, 2014.
++ *
++ *  Description:
++ *
++ *               Fixed bug in getting bitbuffer size.
++ */
++#if 0
+ #define UTILS_ENCDEC_GET_BITBUF_SIZE(width,height,bitrate,framerate)          \
+                     (((width) * (height))/2)
++#else
++#define UTILS_ENCDEC_GET_BITBUF_SIZE(width,height,bitrate,framerate)          \
++                    (((width) * (height)))
++#endif
+ 
+ #define UTILS_ENCDEC_H264PADX                                              (32)
+ #define UTILS_ENCDEC_H264PADY                                              (24)
+-- 
+2.7.4
+
