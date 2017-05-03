@@ -1,0 +1,155 @@
+From faf612f625f3ae3735517eacbed6c908cabd7539 Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Wed, 29 Jun 2016 11:47:03 +0800
+Subject: [PATCH 37/42] Fix the bug: the display is just half screen with
+ 1080I60/50 input
+
+---
+ .../demos/mcfw_api_demos/mcfw_demo/demo_display.c  | 24 ++++++++++++++++-
+ .../links_m3vpss/display/displayLink_drv.c         | 31 +++++++++++++++-------
+ 2 files changed, 44 insertions(+), 11 deletions(-)
+
+diff --git a/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/demo_display.c b/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/demo_display.c
+index f9a97aa..b46487c 100755
+--- a/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/demo_display.c
++++ b/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/demo_display.c
+@@ -1097,7 +1097,7 @@ int Demo_displaySettings(int demoId)
+                             break;
+                         }
+                         printf(gDemo_ResolutionMenu);
+-                        resolution = Demo_getIntValue("Display Id", 1, 8, 1);
++                        resolution = Demo_getIntValue("Display Id", 1,10, 1);
+                         switch(resolution) {
+                             case 1:
+                                 if (displayId != VDIS_DEV_SD)
+@@ -1198,6 +1198,28 @@ int Demo_displaySettings(int demoId)
+                                     }
+                                 }
+                             break;
++                            case 9:
++                             if (displayId != VDIS_DEV_SD)
++                             {
++                                 resolution = VSYS_STD_1080I_60;
++                                 validRes = TRUE;
++                             }
++                             else
++                             {
++                                 printf("\n Resolution Not supported !!\n");
++                             }
++                             break;
++                             case 10:
++                             if (displayId != VDIS_DEV_SD)
++                             {
++                                 resolution = VSYS_STD_1080I_50;
++                                 validRes = TRUE;
++                             }
++                             else
++                             {
++                                 printf("\n Resolution Not supported !!\n");
++                             }
++                             break;
+                             default:
+                                 resolution = VSYS_STD_1080P_60;
+ 
+diff --git a/dvr_rdk/mcfw/src_bios6/links_m3vpss/display/displayLink_drv.c b/dvr_rdk/mcfw/src_bios6/links_m3vpss/display/displayLink_drv.c
+index d6033eb..d84997c 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_m3vpss/display/displayLink_drv.c
++++ b/dvr_rdk/mcfw/src_bios6/links_m3vpss/display/displayLink_drv.c
+@@ -55,15 +55,15 @@ static inline Bool DisplayLink_drvIsDeiDisplayDrv(DisplayLink_Obj * pObj)
+ }
+ 
+ static
+-Bool  DisplayLink_drvIsSDDef(DisplayLink_Obj * pObj)
++Bool  DisplayLink_drvIsInterlacedDislay(UInt32  displayRes)
+ {
+-    Bool isSdDef = FALSE;
++    Bool isInterlacedDisplay = FALSE;
+ 
+-    if (Vsys_isStdInterlaced(pObj->createArgs.displayRes))
++    if (Vsys_isStdInterlaced(displayRes))
+     {
+-        isSdDef = TRUE;
++        isInterlacedDisplay = TRUE;
+     }
+-    return isSdDef;
++    return isInterlacedDisplay;
+ }
+ 
+ static
+@@ -71,7 +71,7 @@ Bool DisplayLink_drvDoInputPitchDoubling(DisplayLink_Obj * pObj)
+ {
+     Bool doPitchDouble = FALSE;
+ 
+-    if (DisplayLink_drvIsSDDef(pObj)
++    if (DisplayLink_drvIsInterlacedDislay(pObj->createArgs.displayRes)
+         &&
+         pObj->displayFormat.fieldMerged[0] == FALSE
+         &&
+@@ -904,6 +904,10 @@ Int32 DisplayLink_drvSetResolution(DisplayLink_Obj *pObj, UInt32 resolution)
+             &pObj->deiDispPrms.scTarWidth,
+             &pObj->deiDispPrms.scTarHeight);
+ 
++        if (DisplayLink_drvIsInterlacedDislay(resolution))
++        {
++            pObj->deiDispPrms.fmt.scanFormat = FVID2_SF_INTERLACED;
++        }
+         status = DisplayLink_drvSetDeiDispPrmsIctl(pObj);
+     }
+     else
+@@ -912,12 +916,19 @@ Int32 DisplayLink_drvSetResolution(DisplayLink_Obj *pObj, UInt32 resolution)
+                           &pObj->displayFormat.width,
+                           &pObj->displayFormat.height);
+ 
++        if (DisplayLink_drvIsInterlacedDislay(resolution))
++        {
++            pObj->displayFormat.scanFormat = FVID2_SF_INTERLACED;
++        }
+         status = FVID2_setFormat(
+                     pObj->displayHndl,
+                     &pObj->displayFormat);
+     }
+ 
+     UTILS_assert(status == FVID2_SOK);
++
++    pObj->createArgs.displayRes = resolution;
++
+     return(status);
+ }
+ 
+@@ -1068,13 +1079,13 @@ Int32 DisplayLink_drvDisplayCreate(DisplayLink_Obj * pObj)
+ 
+     pFormat->fieldMerged[0] = FALSE;
+ 
+-    if (DisplayLink_drvIsSDDef(pObj))    
++    if (DisplayLink_drvIsInterlacedDislay(pObj->createArgs.displayRes))
+     {
+         Int i;
+ 
+         pFormat->scanFormat = FVID2_SF_INTERLACED;
+         pFormat->fieldMerged[0] = TRUE;
+-        if (DisplayLink_drvIsSDDef(pObj))
++        if (DisplayLink_drvIsInterlacedDislay(pObj->createArgs.displayRes))
+         {
+             for (i = 0; i < pObj->createArgs.numInputQueues; i++)
+             {
+@@ -1149,7 +1160,7 @@ Bool DisplayLink_drvIsFieldSeparatedInput(DisplayLink_Obj * pObj,
+     UInt32 fieldMergedHeightPAL;
+     UInt32 fieldMergedHeight1080I;
+ 
+-    UTILS_assert(DisplayLink_drvIsSDDef(pObj) == TRUE);
++    UTILS_assert(DisplayLink_drvIsInterlacedDislay(pObj->createArgs.displayRes) == TRUE);
+     fieldMergedHeightNTSC = 240;
+     fieldMergedHeightPAL  = 288;
+     fieldMergedHeight1080I  = 1080;
+@@ -1192,7 +1203,7 @@ Void DisplayLink_drvSetFieldSeparatedInfo(DisplayLink_Obj * pObj)
+         status = System_linkGetInfo(pPrm->inQueParams[i].prevLinkId,
+                                     &pObj->inTskInfo[i]);
+         UTILS_assert(status == FVID2_SOK);
+-        if (DisplayLink_drvIsSDDef(pObj))
++        if (DisplayLink_drvIsInterlacedDislay(pObj->createArgs.displayRes))
+         {
+             pObj->fieldInput[i] =
+             DisplayLink_drvIsFieldSeparatedInput (pObj,
+-- 
+2.7.4
+
