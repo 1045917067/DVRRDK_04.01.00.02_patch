@@ -1,0 +1,66 @@
+From 9a72741900a49a4c8314169fa4b737e5df3a7bee Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Wed, 8 Jun 2016 17:34:47 +0800
+Subject: [PATCH 09/42] Change osd window number and enlarge MSGQ_MSG size.
+
+---
+ dvr_rdk/mcfw/interfaces/link_api/osdLink.h       | 13 +++++++++++++
+ dvr_rdk/mcfw/interfaces/link_api/system_common.h | 15 +++++++++++++++
+ 2 files changed, 28 insertions(+)
+
+diff --git a/dvr_rdk/mcfw/interfaces/link_api/osdLink.h b/dvr_rdk/mcfw/interfaces/link_api/osdLink.h
+index 9548da5..7adb15b 100755
+--- a/dvr_rdk/mcfw/interfaces/link_api/osdLink.h
++++ b/dvr_rdk/mcfw/interfaces/link_api/osdLink.h
+@@ -155,8 +155,21 @@ extern "C" {
+ /**
+     \brief Max supported OSD windows
+ */
++#if 0
+ #define ALG_LINK_OSD_MAX_WINDOWS (10)
++#else
++/* 
++ *  Modified by: zzx.
++ *
++ *  Date       : Aug 27, 2013.
++ *
++ *  Description:
++ *  
++ *  Change maximum number of osd windows per frame up to 16.
++ */
++#define ALG_LINK_OSD_MAX_WINDOWS (16)
+ 
++#endif
+ /**
+     \brief Max supported OSD channels
+ */
+diff --git a/dvr_rdk/mcfw/interfaces/link_api/system_common.h b/dvr_rdk/mcfw/interfaces/link_api/system_common.h
+index 4032fd3..e52a0de 100755
+--- a/dvr_rdk/mcfw/interfaces/link_api/system_common.h
++++ b/dvr_rdk/mcfw/interfaces/link_api/system_common.h
+@@ -76,7 +76,22 @@
+ 
+ #define SYSTEM_IPC_MSGQ_HEAP_NAME               "IPC_MSGQ_MSG_HEAP"
+ #define SYSTEM_IPC_MSGQ_HEAP_SIZE               (480*1024)
++#if 0
+ #define SYSTEM_IPC_MSGQ_MSG_SIZE_MAX            (96*1024)
++#else
++/*
++ *  Modified by: zzx.
++ *
++ *  Date       : Aug 27, 2013.
++ *
++ *  Description:
++ *
++ *  Change maximum size of MSGQ MSG up to 100K, because the number of osd
++ *  windows per frame was changed.
++ */
++#define SYSTEM_IPC_MSGQ_MSG_SIZE_MAX            (100*1024)
++
++#endif
+ #define SYSTEM_IPC_MSGQ_HEAP                    (1)
+ #define SYSTEM_IPC_MSGQ_MSG_PAYLOAD_PTR(msg)    (Void*)((UInt32)(msg)+sizeof(SystemIpcMsgQ_Msg))
+ 
+-- 
+2.7.4
+
