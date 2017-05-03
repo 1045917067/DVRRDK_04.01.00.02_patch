@@ -1,0 +1,618 @@
+From bed5a40d44b4669557923f5c9a47f45f55897f7c Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Fri, 17 Jun 2016 15:00:58 +0800
+Subject: [PATCH 28/42] v1.0
+
+---
+ Changelog        | 290 +++++++++++++++++++++++++++++++++++++++++++++++++++++
+ ReleaseNotes.txt | 301 +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 591 insertions(+)
+ create mode 100644 Changelog
+ create mode 100644 ReleaseNotes.txt
+
+diff --git a/Changelog b/Changelog
+new file mode 100644
+index 0000000..af169f8
+--- /dev/null
++++ b/Changelog
+@@ -0,0 +1,290 @@
++ -- By default,Do not config external video decoder.
++(2016-06-28 19:48:32 +0800) <zzx>
++ -- Add a helloWorld algorithms link.
++(2016-06-28 19:48:30 +0800) <zzx>
++ -- Add routine to fill the swms window margin.
++(2016-06-28 19:48:29 +0800) <zzx>
++ -- Adjust window parameters dyanmically. Using this feature, we can get original picture scaling ratio.
++(2016-06-28 19:48:27 +0800) <zzx>
++ -- Add link api demos.
++(2016-06-28 19:48:26 +0800) <zzx>
++ -- Add mcfw demos and usecases.
++(2016-06-28 19:48:24 +0800) <zzx>
++ -- Fixed bug in display resolution on TI8107 board.
++(2016-06-28 19:48:23 +0800) <zzx>
++ -- Fix bug in sclr scanformat.
++(2016-06-28 19:48:22 +0800) <zzx>
++ -- Change SWOSD_MAX_WIDTH from 720 to 1920.
++(2016-06-28 19:48:20 +0800) <zzx>
++ -- Fixed bug in getting bitsbuffer size.
++(2016-06-28 19:48:19 +0800) <zzx>
++ -- Fixed bug in user defined colorKey.
++(2016-06-28 19:48:18 +0800) <zzx>
++ -- Change BLACK luma from 0x30 to 0x00.
++(2016-06-28 19:48:16 +0800) <zzx>
++ -- Detect overflow and reset capture driver.
++(2016-06-28 19:48:15 +0800) <zzx>
++ -- Disable to set capture resolution after set secondary stream's resolution.
++(2016-06-28 19:48:14 +0800) <zzx>
++ -- Add routines to get HDMI edid.
++(2016-06-28 19:48:12 +0800) <zzx>
++ -- Add routines to set HDMI edid.
++(2016-06-28 19:48:11 +0800) <zzx>
++ -- Start SII9233A device after set video mode.
++(2016-06-28 19:48:10 +0800) <zzx>
++ -- Add RingBufferReaderAcquire2 routine.
++(2016-06-28 19:48:08 +0800) <zzx>
++ -- Change osd window number and enlarge MSGQ_MSG size.
++(2016-06-28 19:48:07 +0800) <zzx>
++ -- Fixed bug in disable decode channel.
++(2016-06-28 19:48:05 +0800) <zzx>
++ -- Add mcfw_api support.
++(2016-06-28 19:48:04 +0800) <zzx>
++ -- Modify to select vga analog VENC sync out.
++(2016-06-28 19:48:03 +0800) <zzx>
++ -- Add link_api support.
++(2016-06-28 19:47:50 +0800) <zzx>
++ -- Add SII9233A video decoder driver support.
++(2016-06-27 19:00:58 +0800) <zzx>
++ -- Add video standard support.
++(2016-06-27 19:00:56 +0800) <zzx>
++ -- Delete SYSTEM_PLATFORM_BOARD.
++(2016-06-27 19:00:55 +0800) <zzx>
++ -- Add build support for ti81xx board.
++(2016-06-27 19:00:41 +0800) <zzx>
++ -- Setup pinmux for ti816x capture/display.
++(2016-06-08 16:23:37 +0800) <zzx>
++ -- Delete pre_built_bin.
++(2016-06-08 16:12:54 +0800) <zzx>
++ -- Add rootfs tar ball.
++(2016-06-08 14:48:53 +0800) <zzx>
++ -- Add vcs_led_success vcs_led_failure command support
++(2015-06-25 14:28:01 +0800) <wangquan>
++ -- Add ntpdate, ntpd, ntptrace command support
++(2015-06-16 14:22:57 +0800) <wangquan>
++ -- Add timezone +8 support
++(2015-06-16 14:20:45 +0800) <wangquan>
++ -- optimizate the filesystem to delete unused files /lib/modules and change file /etc/network/interfaces
++(2014-10-08 11:13:26 +0800) <wangquan>
++ -- optimizate the filesystem
++(2014-05-16 18:59:18 +0800) <wangquan>
++ -- Add wlan support including wlan's driver modules,firmware,config fils,boot script,tools and so on
++(2013-11-08 11:20:24 +0800) <wangquan>
++ -- Delete unused file in /opt and /boot directory
++(2013-11-08 11:17:36 +0800) <wangquan>
++ -- Remove rcS mounting sda2
++(2013-08-26 12:11:26 +0800) <wangquan>
++ -- Add ppp tools ,wireless tools,fw_printenv tools
++(2013-08-26 11:31:00 +0800) <wangquan>
++ -- Modify filesystem network interfaces file to set static eth0 ip
++(2013-08-26 10:41:23 +0800) <wangquan>
++ -- Modify hostname to ti81xx and Change the default debug tty to ttyO2
++(2013-08-26 10:34:08 +0800) <wangquan>
++ -- Workshop_dm8168_4.0 Initilazing
++(2013-07-02 18:15:56 +0800) <wangquan>
++ -- upgraded to 3.0.2 version
++(2016-05-15 19:28:29 -0700) <wangquan>
++ -- Add simplified chinese support for ti8168_vrs
++(2016-05-15 19:18:06 -0700) <wangquan>
++ -- Add new board ti8168_xt kernel and uboot code
++(2016-05-15 18:57:07 -0700) <wangquan>
++ -- Delete sata pll code for ti8107(dm385) board
++(2015-10-19 11:23:23 +0800) <wangquan>
++ -- Repair et1011c bug about 1000M network in kernel
++(2015-10-19 10:55:30 +0800) <wangquan>
++ -- Add new board ti8168_vrs kernel and uboot code
++(2015-06-16 14:18:57 +0800) <wangquan>
++ -- Add new board ti8168_201test kernel and uboot code
++(2015-06-11 16:47:01 +0800) <wangquan>
++ -- Add new board ti8168_hj kernel and uboot code
++(2015-06-10 15:54:38 +0800) <wangquan>
++ -- Add new board ti8168_zcc kernel and uboot code
++(2015-06-10 15:32:25 +0800) <wangquan>
++ -- Add new board ti8168_zfhk kernel and uboot code
++(2015-06-10 15:15:18 +0800) <wangquan>
++ -- Add spansion nandflash support
++(2015-06-04 15:47:01 +0800) <wangquan>
++ -- Add dual network card support
++(2015-06-04 15:45:06 +0800) <wangquan>
++ -- Delete PCIE and SATA support for ti8107 board
++(2015-05-18 14:55:27 +0800) <wangquan>
++ -- Add new board ti8168_vcs kernel and uboot code
++(2014-10-08 11:34:06 +0800) <wangquan>
++ -- Add new board ti8168_hbl kernel and uboot code
++(2014-05-15 16:21:47 +0800) <wangquan>
++ -- Add new board ti8107_hlc kernel and uboot code
++(2014-05-15 15:16:10 +0800) <wangquan>
++ -- Add spi subsystem for gv7601 on board ti8168_etv
++(2014-05-15 15:06:38 +0800) <wangquan>
++ -- Perform watchdog function for all board: won't stop timer when the file /dev/watchdog closed
++(2014-05-14 11:55:58 +0800) <wangquan>
++ -- Add esam function for ti8168_hlc ti8168_etv ti8107_ins
++(2014-05-14 11:44:19 +0800) <wangquan>
++ -- Add esam driver
++(2014-05-14 11:43:28 +0800) <wangquan>
++ -- Repair video driver dctrl.c,sysfs.h and cz bsp file
++(2014-01-21 19:53:03 +0800) <wangquan>
++ -- Add gpio 24V_OUT support and network router support
++(2014-01-21 18:50:42 +0800) <wangquan>
++ -- Repair usb control driver musb/ti81xx.c and usb 3G driver usb_wwan.c
++(2014-01-21 18:36:44 +0800) <wangquan>
++ -- Repair audio driver noise problems
++(2014-01-21 14:43:30 +0800) <wangquan>
++ -- Add 2GB DDR3 support in kernel
++(2014-01-21 14:34:15 +0800) <wangquan>
++ -- Modify uboot env_size=0x20000 and expand filesystem size on nandflash
++(2013-11-08 13:32:16 +0800) <wangquan>
++ -- Add WLAN(ar6000) support for ti8107_ins board
++(2013-11-05 15:21:10 +0800) <wangquan>
++ -- Perfect MMC BUS code
++(2013-11-05 15:19:01 +0800) <wangquan>
++ -- Add additional check for REFCLK_LJCB TRIM values
++(2013-10-15 11:44:50 +0800) <wangquan>
++ -- Add much video standard macro in kernel
++(2013-10-15 11:38:45 +0800) <wangquan>
++ -- Repair DM8168 network problemby clear priv interrupts
++(2013-10-15 11:35:21 +0800) <wangquan>
++ -- Repair DM385 1000M network including modify cpswdriver, delete ET1011C_PHY driver And Delete SATA driver
++(2013-10-15 11:29:30 +0800) <wangquan>
++ -- Delete some code about video mux in kernel
++(2013-08-30 21:03:12 +0800) <wangquan>
++ -- Add gpio supprt for ti8107ins board in kernel
++(2013-08-30 15:13:25 +0800) <wangquan>
++ -- Repair mcasp1 ahclkx pinmux
++(2013-08-29 11:44:56 +0800) <wangquan>
++ -- Add ti8107ins audio support
++(2013-08-29 11:42:22 +0800) <wangquan>
++ -- Add kernel version for ti8107ins board
++(2013-08-26 16:46:36 +0800) <wangquan>
++ -- Change phy_fixup function name in board-ti8107ins.c
++(2013-08-26 14:57:07 +0800) <wangquan>
++ -- Upgrade config for ti8107ins board
++(2013-08-26 10:25:35 +0800) <wangquan>
++ -- Repair ti8107ins net phy problem in kernel
++(2013-08-26 10:25:01 +0800) <wangquan>
++ -- Modify ti8107ins osc1 clock to 22579000
++(2013-08-26 10:24:15 +0800) <wangquan>
++ -- add boot the kernel
++(2013-08-23 10:03:54 +0800) <wangquan>
++ -- Modify some code for board-ti8107ins.c and mmc change to 2
++(2013-08-21 17:20:48 +0800) <wangquan>
++ -- Delete BCH_120_DVR Code Because of his dirty And modify net phy id
++(2013-08-21 16:57:28 +0800) <wangquan>
++ -- Add ti8107_ins board in kernel
++(2013-08-21 11:40:20 +0800) <wangquan>
++ -- Add boardId for ti8107_ins board in kernel
++(2013-08-19 18:48:09 +0800) <wangquan>
++ -- Add GPIOA-GPIOH support for btjx board
++(2013-08-15 10:19:30 +0800) <wangquan>
++ -- Modify btjx board gpio using
++(2013-08-14 16:02:23 +0800) <wangquan>
++ -- Modify audio problem davinci_mcasp.c
++(2013-07-25 18:20:39 +0800) <wangquan>
++ -- Modify gpiolib.c to add /sys/class/gpio/XXX
++(2013-07-25 17:11:26 +0800) <wangquan>
++ -- Modify tlv320aic32repeat clock
++(2013-07-25 16:13:54 +0800) <wangquan>
++ -- Add GPIO Surport For HLC board
++(2013-07-25 16:10:05 +0800) <wangquan>
++ -- Modify wlan config
++(2013-07-03 16:14:42 +0800) <wangquan>
++ -- Perfect audio driver
++(2013-07-03 16:10:17 +0800) <wangquan>
++ -- Perfect audio driver
++(2013-07-03 16:09:43 +0800) <wangquan>
++ -- Modify config file to add fs_notify and inotify_user for all board
++(2013-07-03 16:08:36 +0800) <wangquan>
++ -- Modify wl12xx head file
++(2013-07-03 15:16:22 +0800) <wangquan>
++ -- Modify audio and video driver for all board
++(2013-07-03 14:54:17 +0800) <wangquan>
++ -- Modify video decoder interface for all board
++(2013-07-03 14:07:34 +0800) <wangquan>
++ -- Modify Baudrate B4800 into 7200
++(2013-07-03 13:50:39 +0800) <wangquan>
++ -- Modify PIPE_BUF size
++(2013-07-03 13:43:50 +0800) <wangquan>
++ -- Add build script for all board
++(2013-07-03 13:38:28 +0800) <wangquan>
++ -- Add console print at the start od kernel
++(2013-07-03 13:35:55 +0800) <wangquan>
++ -- Add rtc-x1226 driver for all board
++(2013-07-03 13:28:25 +0800) <wangquan>
++ -- Add sii3826 support for all board
++(2013-07-03 13:26:17 +0800) <wangquan>
++ -- Modify phy driver for hlc board
++(2013-07-03 13:19:38 +0800) <wangquan>
++ -- Modify nand driver for all board
++(2013-07-03 13:04:41 +0800) <wangquan>
++ -- Modify mach-types Makefile Kconfig for new board
++(2013-07-03 11:29:48 +0800) <wangquan>
++ -- Add all board into new kernel
++(2013-07-03 11:28:13 +0800) <wangquan>
++ -- Delete uImage_2G
++(2013-07-03 11:08:32 +0800) <wangquan>
++ -- Workshop_dm8168_4.0 Initilazing
++(2013-07-02 18:15:56 +0800) <wangquan>
++ -- Add new board ti8168_xt kernel and uboot code
++(2016-05-15 18:57:07 -0700) <wangquan>
++ -- Add 1.1GHZ support for ARM in u-boot.bin
++(2015-10-19 10:55:04 +0800) <wangquan>
++ -- Add new board ti8168_vrs kernel and uboot code
++(2015-06-16 14:18:57 +0800) <wangquan>
++ -- Add new board ti8168_201test kernel and uboot code
++(2015-06-11 16:47:01 +0800) <wangquan>
++ -- Add new board ti8168_hj kernel and uboot code
++(2015-06-10 15:54:38 +0800) <wangquan>
++ -- Add new board ti8168_zcc kernel and uboot code
++(2015-06-10 15:32:25 +0800) <wangquan>
++ -- Add new board ti8168_zfhk kernel and uboot code
++(2015-06-10 15:15:18 +0800) <wangquan>
++ -- Modify DM8168 and DM8107 DDR3 code to compatible all boards
++(2015-05-18 14:49:58 +0800) <wangquan>
++ -- Add new board ti8168_vcs kernel and uboot code
++(2014-10-08 11:34:06 +0800) <wangquan>
++ -- Add new board ti8168_hbl kernel and uboot code
++(2014-05-15 16:21:47 +0800) <wangquan>
++ -- Add new board ti8107_hlc kernel and uboot code
++(2014-05-15 15:16:10 +0800) <wangquan>
++ -- Modify uboot env_size=0x20000 and expand filesystem size on nandflash
++(2013-11-08 13:32:16 +0800) <wangquan>
++ -- Modify u-boot for ti8107 to support 512M DDR MAP and 533MHZ fruquency and 480MHZ HDVICP
++(2013-11-05 14:56:07 +0800) <wangquan>
++ -- Delete configure_i2c_sii9022 and make the ti816x to support 720p logo not the 640x480p logo in u-boot
++(2013-11-04 18:18:40 +0800) <wangquan>
++ -- Delete configure_i2c_sd_thsfilter and configure_i2c_sii9022 for DM385 and Delete configure_i2c_sd_thsfilter for DM8168
++(2013-10-15 18:02:10 +0800) <wangquan>
++ -- Modify uboot for DM385 to add 533MHZ support
++(2013-10-15 11:11:55 +0800) <wangquan>
++ -- Modify DDR map for 256MB
++(2013-09-05 12:11:00 +0800) <wangquan>
++ -- Modify DDF mapping to support dvrrdk
++(2013-09-03 13:04:16 +0800) <wangquan>
++ -- Repair DDR3 and emac net problem for ti8107_ins board in uboot and delete some code for TI810XDVR
++(2013-08-20 13:50:51 +0800) <wangquan>
++ -- Repair ti8107 compile problem caused by Makefile
++(2013-08-20 13:28:57 +0800) <wangquan>
++ -- Add support for new board ti8107_ins in uboot
++(2013-08-20 11:27:20 +0800) <wangquan>
++ -- Add 400MHZ and 256MB size DDR3 for ti8107_ins board
++(2013-08-19 18:45:26 +0800) <wangquan>
++ -- Add All board support in RDK4.0 uboot
++(2013-08-14 14:54:27 +0800) <wangquan>
++ -- upgrade mach-types.h for uboot
++(2013-08-14 14:49:35 +0800) <wangquan>
++ -- Delete BoardRate print And EMIF test
++(2013-08-14 13:56:29 +0800) <wangquan>
++ -- Modify L3 FAST PLL 520MHZ,HDVPSS 260MHZ,DUCATI M3 260MHZ
++(2013-08-14 13:54:59 +0800) <wangquan>
++ -- Add build.sh for u-boot
++(2013-08-14 13:29:36 +0800) <wangquan>
++ -- Add delay function to make davinci_emac driver work normally
++(2013-08-14 13:28:56 +0800) <wangquan>
++ -- Delete/Add some code to use the configfile to config DDR PLL and ARM PLL
++(2013-08-14 13:27:55 +0800) <wangquan>
++ -- Workshop_dm8168_4.0 Initilazing
++(2013-07-02 18:15:56 +0800) <wangquan>
++ -- Delete origion uboot and kernel.
++(2016-06-08 14:32:00 +0800) <zzx>
++ -- Initilazing.
++(2016-06-08 11:40:00 +0800) <zzx>
+diff --git a/ReleaseNotes.txt b/ReleaseNotes.txt
+new file mode 100644
+index 0000000..ce33f8c
+--- /dev/null
++++ b/ReleaseNotes.txt
+@@ -0,0 +1,301 @@
++ReleaseNotes
++
++-------------------------------------------------------------------------------
++Version 1.0 (Jun 17, 2016 zzx)
++-------------------------------------------------------------------------------
++
++Overview
++
++
++Changelog
++
++-- By default,Do not config external video decoder.
++(2016-06-28 19:48:32 +0800) <zzx>
++ -- Add a helloWorld algorithms link.
++(2016-06-28 19:48:30 +0800) <zzx>
++ -- Add routine to fill the swms window margin.
++(2016-06-28 19:48:29 +0800) <zzx>
++ -- Adjust window parameters dyanmically. Using this feature, we can get original picture scaling ratio.
++(2016-06-28 19:48:27 +0800) <zzx>
++ -- Add link api demos.
++(2016-06-28 19:48:26 +0800) <zzx>
++ -- Add mcfw demos and usecases.
++(2016-06-28 19:48:24 +0800) <zzx>
++ -- Fixed bug in display resolution on TI8107 board.
++(2016-06-28 19:48:23 +0800) <zzx>
++ -- Fix bug in sclr scanformat.
++(2016-06-28 19:48:22 +0800) <zzx>
++ -- Change SWOSD_MAX_WIDTH from 720 to 1920.
++(2016-06-28 19:48:20 +0800) <zzx>
++ -- Fixed bug in getting bitsbuffer size.
++(2016-06-28 19:48:19 +0800) <zzx>
++ -- Fixed bug in user defined colorKey.
++(2016-06-28 19:48:18 +0800) <zzx>
++ -- Change BLACK luma from 0x30 to 0x00.
++(2016-06-28 19:48:16 +0800) <zzx>
++ -- Detect overflow and reset capture driver.
++(2016-06-28 19:48:15 +0800) <zzx>
++ -- Disable to set capture resolution after set secondary stream's resolution.
++(2016-06-28 19:48:14 +0800) <zzx>
++ -- Add routines to get HDMI edid.
++(2016-06-28 19:48:12 +0800) <zzx>
++ -- Add routines to set HDMI edid.
++(2016-06-28 19:48:11 +0800) <zzx>
++ -- Start SII9233A device after set video mode.
++(2016-06-28 19:48:10 +0800) <zzx>
++ -- Add RingBufferReaderAcquire2 routine.
++(2016-06-28 19:48:08 +0800) <zzx>
++ -- Change osd window number and enlarge MSGQ_MSG size.
++(2016-06-28 19:48:07 +0800) <zzx>
++ -- Fixed bug in disable decode channel.
++(2016-06-28 19:48:05 +0800) <zzx>
++ -- Add mcfw_api support.
++(2016-06-28 19:48:04 +0800) <zzx>
++ -- Modify to select vga analog VENC sync out.
++(2016-06-28 19:48:03 +0800) <zzx>
++ -- Add link_api support.
++(2016-06-28 19:47:50 +0800) <zzx>
++ -- Add SII9233A video decoder driver support.
++(2016-06-27 19:00:58 +0800) <zzx>
++ -- Add video standard support.
++(2016-06-27 19:00:56 +0800) <zzx>
++ -- Delete SYSTEM_PLATFORM_BOARD.
++(2016-06-27 19:00:55 +0800) <zzx>
++ -- Add build support for ti81xx board.
++(2016-06-27 19:00:41 +0800) <zzx>
++ -- Setup pinmux for ti816x capture/display.
++(2016-06-08 16:23:37 +0800) <zzx>
++ -- Delete pre_built_bin.
++(2016-06-08 16:12:54 +0800) <zzx>
++ -- Add rootfs tar ball.
++(2016-06-08 14:48:53 +0800) <zzx>
++ -- Add vcs_led_success vcs_led_failure command support
++(2015-06-25 14:28:01 +0800) <wangquan>
++ -- Add ntpdate, ntpd, ntptrace command support
++(2015-06-16 14:22:57 +0800) <wangquan>
++ -- Add timezone +8 support
++(2015-06-16 14:20:45 +0800) <wangquan>
++ -- optimizate the filesystem to delete unused files /lib/modules and change file /etc/network/interfaces
++(2014-10-08 11:13:26 +0800) <wangquan>
++ -- optimizate the filesystem
++(2014-05-16 18:59:18 +0800) <wangquan>
++ -- Add wlan support including wlan's driver modules,firmware,config fils,boot script,tools and so on
++(2013-11-08 11:20:24 +0800) <wangquan>
++ -- Delete unused file in /opt and /boot directory
++(2013-11-08 11:17:36 +0800) <wangquan>
++ -- Remove rcS mounting sda2
++(2013-08-26 12:11:26 +0800) <wangquan>
++ -- Add ppp tools ,wireless tools,fw_printenv tools
++(2013-08-26 11:31:00 +0800) <wangquan>
++ -- Modify filesystem network interfaces file to set static eth0 ip
++(2013-08-26 10:41:23 +0800) <wangquan>
++ -- Modify hostname to ti81xx and Change the default debug tty to ttyO2
++(2013-08-26 10:34:08 +0800) <wangquan>
++ -- Workshop_dm8168_4.0 Initilazing
++(2013-07-02 18:15:56 +0800) <wangquan>
++ -- upgraded to 3.0.2 version
++(2016-05-15 19:28:29 -0700) <wangquan>
++ -- Add simplified chinese support for ti8168_vrs
++(2016-05-15 19:18:06 -0700) <wangquan>
++ -- Add new board ti8168_xt kernel and uboot code
++(2016-05-15 18:57:07 -0700) <wangquan>
++ -- Delete sata pll code for ti8107(dm385) board
++(2015-10-19 11:23:23 +0800) <wangquan>
++ -- Repair et1011c bug about 1000M network in kernel
++(2015-10-19 10:55:30 +0800) <wangquan>
++ -- Add new board ti8168_vrs kernel and uboot code
++(2015-06-16 14:18:57 +0800) <wangquan>
++ -- Add new board ti8168_201test kernel and uboot code
++(2015-06-11 16:47:01 +0800) <wangquan>
++ -- Add new board ti8168_hj kernel and uboot code
++(2015-06-10 15:54:38 +0800) <wangquan>
++ -- Add new board ti8168_zcc kernel and uboot code
++(2015-06-10 15:32:25 +0800) <wangquan>
++ -- Add new board ti8168_zfhk kernel and uboot code
++(2015-06-10 15:15:18 +0800) <wangquan>
++ -- Add spansion nandflash support
++(2015-06-04 15:47:01 +0800) <wangquan>
++ -- Add dual network card support
++(2015-06-04 15:45:06 +0800) <wangquan>
++ -- Delete PCIE and SATA support for ti8107 board
++(2015-05-18 14:55:27 +0800) <wangquan>
++ -- Add new board ti8168_vcs kernel and uboot code
++(2014-10-08 11:34:06 +0800) <wangquan>
++ -- Add new board ti8168_hbl kernel and uboot code
++(2014-05-15 16:21:47 +0800) <wangquan>
++ -- Add new board ti8107_hlc kernel and uboot code
++(2014-05-15 15:16:10 +0800) <wangquan>
++ -- Add spi subsystem for gv7601 on board ti8168_etv
++(2014-05-15 15:06:38 +0800) <wangquan>
++ -- Perform watchdog function for all board: won't stop timer when the file /dev/watchdog closed
++(2014-05-14 11:55:58 +0800) <wangquan>
++ -- Add esam function for ti8168_hlc ti8168_etv ti8107_ins
++(2014-05-14 11:44:19 +0800) <wangquan>
++ -- Add esam driver
++(2014-05-14 11:43:28 +0800) <wangquan>
++ -- Repair video driver dctrl.c,sysfs.h and cz bsp file
++(2014-01-21 19:53:03 +0800) <wangquan>
++ -- Add gpio 24V_OUT support and network router support
++(2014-01-21 18:50:42 +0800) <wangquan>
++ -- Repair usb control driver musb/ti81xx.c and usb 3G driver usb_wwan.c
++(2014-01-21 18:36:44 +0800) <wangquan>
++ -- Repair audio driver noise problems
++(2014-01-21 14:43:30 +0800) <wangquan>
++ -- Add 2GB DDR3 support in kernel
++(2014-01-21 14:34:15 +0800) <wangquan>
++ -- Modify uboot env_size=0x20000 and expand filesystem size on nandflash
++(2013-11-08 13:32:16 +0800) <wangquan>
++ -- Add WLAN(ar6000) support for ti8107_ins board
++(2013-11-05 15:21:10 +0800) <wangquan>
++ -- Perfect MMC BUS code
++(2013-11-05 15:19:01 +0800) <wangquan>
++ -- Add additional check for REFCLK_LJCB TRIM values
++(2013-10-15 11:44:50 +0800) <wangquan>
++ -- Add much video standard macro in kernel
++(2013-10-15 11:38:45 +0800) <wangquan>
++ -- Repair DM8168 network problemby clear priv interrupts
++(2013-10-15 11:35:21 +0800) <wangquan>
++ -- Repair DM385 1000M network including modify cpswdriver, delete ET1011C_PHY driver And Delete SATA driver
++(2013-10-15 11:29:30 +0800) <wangquan>
++ -- Delete some code about video mux in kernel
++(2013-08-30 21:03:12 +0800) <wangquan>
++ -- Add gpio supprt for ti8107ins board in kernel
++(2013-08-30 15:13:25 +0800) <wangquan>
++ -- Repair mcasp1 ahclkx pinmux
++(2013-08-29 11:44:56 +0800) <wangquan>
++ -- Add ti8107ins audio support
++(2013-08-29 11:42:22 +0800) <wangquan>
++ -- Add kernel version for ti8107ins board
++(2013-08-26 16:46:36 +0800) <wangquan>
++ -- Change phy_fixup function name in board-ti8107ins.c
++(2013-08-26 14:57:07 +0800) <wangquan>
++ -- Upgrade config for ti8107ins board
++(2013-08-26 10:25:35 +0800) <wangquan>
++ -- Repair ti8107ins net phy problem in kernel
++(2013-08-26 10:25:01 +0800) <wangquan>
++ -- Modify ti8107ins osc1 clock to 22579000
++(2013-08-26 10:24:15 +0800) <wangquan>
++ -- add boot the kernel
++(2013-08-23 10:03:54 +0800) <wangquan>
++ -- Modify some code for board-ti8107ins.c and mmc change to 2
++(2013-08-21 17:20:48 +0800) <wangquan>
++ -- Delete BCH_120_DVR Code Because of his dirty And modify net phy id
++(2013-08-21 16:57:28 +0800) <wangquan>
++ -- Add ti8107_ins board in kernel
++(2013-08-21 11:40:20 +0800) <wangquan>
++ -- Add boardId for ti8107_ins board in kernel
++(2013-08-19 18:48:09 +0800) <wangquan>
++ -- Add GPIOA-GPIOH support for btjx board
++(2013-08-15 10:19:30 +0800) <wangquan>
++ -- Modify btjx board gpio using
++(2013-08-14 16:02:23 +0800) <wangquan>
++ -- Modify audio problem davinci_mcasp.c
++(2013-07-25 18:20:39 +0800) <wangquan>
++ -- Modify gpiolib.c to add /sys/class/gpio/XXX
++(2013-07-25 17:11:26 +0800) <wangquan>
++ -- Modify tlv320aic32repeat clock
++(2013-07-25 16:13:54 +0800) <wangquan>
++ -- Add GPIO Surport For HLC board
++(2013-07-25 16:10:05 +0800) <wangquan>
++ -- Modify wlan config
++(2013-07-03 16:14:42 +0800) <wangquan>
++ -- Perfect audio driver
++(2013-07-03 16:10:17 +0800) <wangquan>
++ -- Perfect audio driver
++(2013-07-03 16:09:43 +0800) <wangquan>
++ -- Modify config file to add fs_notify and inotify_user for all board
++(2013-07-03 16:08:36 +0800) <wangquan>
++ -- Modify wl12xx head file
++(2013-07-03 15:16:22 +0800) <wangquan>
++ -- Modify audio and video driver for all board
++(2013-07-03 14:54:17 +0800) <wangquan>
++ -- Modify video decoder interface for all board
++(2013-07-03 14:07:34 +0800) <wangquan>
++ -- Modify Baudrate B4800 into 7200
++(2013-07-03 13:50:39 +0800) <wangquan>
++ -- Modify PIPE_BUF size
++(2013-07-03 13:43:50 +0800) <wangquan>
++ -- Add build script for all board
++(2013-07-03 13:38:28 +0800) <wangquan>
++ -- Add console print at the start od kernel
++(2013-07-03 13:35:55 +0800) <wangquan>
++ -- Add rtc-x1226 driver for all board
++(2013-07-03 13:28:25 +0800) <wangquan>
++ -- Add sii3826 support for all board
++(2013-07-03 13:26:17 +0800) <wangquan>
++ -- Modify phy driver for hlc board
++(2013-07-03 13:19:38 +0800) <wangquan>
++ -- Modify nand driver for all board
++(2013-07-03 13:04:41 +0800) <wangquan>
++ -- Modify mach-types Makefile Kconfig for new board
++(2013-07-03 11:29:48 +0800) <wangquan>
++ -- Add all board into new kernel
++(2013-07-03 11:28:13 +0800) <wangquan>
++ -- Delete uImage_2G
++(2013-07-03 11:08:32 +0800) <wangquan>
++ -- Workshop_dm8168_4.0 Initilazing
++(2013-07-02 18:15:56 +0800) <wangquan>
++ -- Add new board ti8168_xt kernel and uboot code
++(2016-05-15 18:57:07 -0700) <wangquan>
++ -- Add 1.1GHZ support for ARM in u-boot.bin
++(2015-10-19 10:55:04 +0800) <wangquan>
++ -- Add new board ti8168_vrs kernel and uboot code
++(2015-06-16 14:18:57 +0800) <wangquan>
++ -- Add new board ti8168_201test kernel and uboot code
++(2015-06-11 16:47:01 +0800) <wangquan>
++ -- Add new board ti8168_hj kernel and uboot code
++(2015-06-10 15:54:38 +0800) <wangquan>
++ -- Add new board ti8168_zcc kernel and uboot code
++(2015-06-10 15:32:25 +0800) <wangquan>
++ -- Add new board ti8168_zfhk kernel and uboot code
++(2015-06-10 15:15:18 +0800) <wangquan>
++ -- Modify DM8168 and DM8107 DDR3 code to compatible all boards
++(2015-05-18 14:49:58 +0800) <wangquan>
++ -- Add new board ti8168_vcs kernel and uboot code
++(2014-10-08 11:34:06 +0800) <wangquan>
++ -- Add new board ti8168_hbl kernel and uboot code
++(2014-05-15 16:21:47 +0800) <wangquan>
++ -- Add new board ti8107_hlc kernel and uboot code
++(2014-05-15 15:16:10 +0800) <wangquan>
++ -- Modify uboot env_size=0x20000 and expand filesystem size on nandflash
++(2013-11-08 13:32:16 +0800) <wangquan>
++ -- Modify u-boot for ti8107 to support 512M DDR MAP and 533MHZ fruquency and 480MHZ HDVICP
++(2013-11-05 14:56:07 +0800) <wangquan>
++ -- Delete configure_i2c_sii9022 and make the ti816x to support 720p logo not the 640x480p logo in u-boot
++(2013-11-04 18:18:40 +0800) <wangquan>
++ -- Delete configure_i2c_sd_thsfilter and configure_i2c_sii9022 for DM385 and Delete configure_i2c_sd_thsfilter for DM8168
++(2013-10-15 18:02:10 +0800) <wangquan>
++ -- Modify uboot for DM385 to add 533MHZ support
++(2013-10-15 11:11:55 +0800) <wangquan>
++ -- Modify DDR map for 256MB
++(2013-09-05 12:11:00 +0800) <wangquan>
++ -- Modify DDF mapping to support dvrrdk
++(2013-09-03 13:04:16 +0800) <wangquan>
++ -- Repair DDR3 and emac net problem for ti8107_ins board in uboot and delete some code for TI810XDVR
++(2013-08-20 13:50:51 +0800) <wangquan>
++ -- Repair ti8107 compile problem caused by Makefile
++(2013-08-20 13:28:57 +0800) <wangquan>
++ -- Add support for new board ti8107_ins in uboot
++(2013-08-20 11:27:20 +0800) <wangquan>
++ -- Add 400MHZ and 256MB size DDR3 for ti8107_ins board
++(2013-08-19 18:45:26 +0800) <wangquan>
++ -- Add All board support in RDK4.0 uboot
++(2013-08-14 14:54:27 +0800) <wangquan>
++ -- upgrade mach-types.h for uboot
++(2013-08-14 14:49:35 +0800) <wangquan>
++ -- Delete BoardRate print And EMIF test
++(2013-08-14 13:56:29 +0800) <wangquan>
++ -- Modify L3 FAST PLL 520MHZ,HDVPSS 260MHZ,DUCATI M3 260MHZ
++(2013-08-14 13:54:59 +0800) <wangquan>
++ -- Add build.sh for u-boot
++(2013-08-14 13:29:36 +0800) <wangquan>
++ -- Add delay function to make davinci_emac driver work normally
++(2013-08-14 13:28:56 +0800) <wangquan>
++ -- Delete/Add some code to use the configfile to config DDR PLL and ARM PLL
++(2013-08-14 13:27:55 +0800) <wangquan>
++ -- Workshop_dm8168_4.0 Initilazing
++(2013-07-02 18:15:56 +0800) <wangquan>
++ -- Delete origion uboot and kernel.
++(2016-06-08 14:32:00 +0800) <zzx>
++ -- Initilazing.
++(2016-06-08 11:40:00 +0800) <zzx>
+-- 
+2.7.4
+
