@@ -1,0 +1,34 @@
+From e3afef52b3596f2eed5626490cf0b2cb81bf7637 Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Fri, 10 Jun 2016 18:03:22 +0800
+Subject: [PATCH 15/42] Detect overflow and reset capture driver.
+
+---
+ dvr_rdk/mcfw/src_bios6/links_m3vpss/capture/captureLink_drv.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/dvr_rdk/mcfw/src_bios6/links_m3vpss/capture/captureLink_drv.c b/dvr_rdk/mcfw/src_bios6/links_m3vpss/capture/captureLink_drv.c
+index 7484526..c126120 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_m3vpss/capture/captureLink_drv.c
++++ b/dvr_rdk/mcfw/src_bios6/links_m3vpss/capture/captureLink_drv.c
+@@ -1469,6 +1469,17 @@ Int32 CaptureLink_drvStart(CaptureLink_Obj * pObj)
+         pInstObj->captureStartTime = Avsync_getWallTime();
+     }
+ 
++    /*
++     *  Modified by: zzx.
++     *
++     *  Date       : Apr 18, 2014.
++     *
++     *  Description:
++     *
++     *      Detect overflow and reset capture driver.
++     */
++    CaptureLink_drvOverflowDetectAndReset(pObj, TRUE);
++
+ #ifdef SYSTEM_DEBUG_CAPTURE
+     Vps_printf(" %d: CAPTURE: Start Done !!!\n", Utils_getCurTimeInMsec());
+ #endif
+-- 
+2.7.4
+
