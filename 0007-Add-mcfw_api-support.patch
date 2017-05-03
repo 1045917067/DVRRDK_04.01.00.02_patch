@@ -1,0 +1,745 @@
+From 3a8f96f7247fc2f3947af2a5bc7be16e89a191ce Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Wed, 8 Jun 2016 17:31:55 +0800
+Subject: [PATCH 07/42] Add mcfw_api support.
+
+---
+ dvr_rdk/mcfw/interfaces/ti_vcap.h                  |  23 +-
+ .../src_linux/links/ipcBitsIn/ipcBitsInLink_tsk.c  |   2 +-
+ .../links/ipcFramesOut/ipcFramesOutLink_tsk.c      |  15 +-
+ dvr_rdk/mcfw/src_linux/mcfw_api/ti_vcap.c          |  74 ++++-
+ dvr_rdk/mcfw/src_linux/mcfw_api/ti_vcap_device.c   |  25 +-
+ dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis.c          | 363 +++++++++++----------
+ .../src_linux/mcfw_api/usecases/multich_common.c   |   7 -
+ dvr_rdk/mcfw/src_linux/osa/src/osa_thr.c           |   1 +
+ 8 files changed, 308 insertions(+), 202 deletions(-)
+
+diff --git a/dvr_rdk/mcfw/interfaces/ti_vcap.h b/dvr_rdk/mcfw/interfaces/ti_vcap.h
+index ac90bd7..4f82994 100755
+--- a/dvr_rdk/mcfw/interfaces/ti_vcap.h
++++ b/dvr_rdk/mcfw/interfaces/ti_vcap.h
+@@ -254,14 +254,21 @@ typedef struct
+     Bool                    portEnable;
+     /**< Enable/Disable Capture Port */
+ 
+-    VCAP_MODE_E             portMode;
+-    /**< Capture bus interface mode */
+-
+-    VCAP_MULTICHN_OPTION_E  dataFormat;
+-    /**< Capture Multi-channel mode */
+-
+-    VIDEO_STANDARD_E        signalType;
+-    /**< Capture video standard or signal type */
++    UInt32                  videoCaptureMode;
++    /**< Video capture mode. For valid values see #System_CaptVideoCaptureMode */
++    
++    UInt32                  videoIfMode;
++    /**< Video interface mode. For valid values see #System_CaptVideoIfMode */
++    
++    UInt32                  inDataFormat;
++    /**< Input source data format, RGB or YUV422, see System_VideoDataFormat */
++    
++    UInt32                  standard;
++    /**< Required video standard, see System_VideoStandard */
++    
++    UInt32                  inScanFormat;
++    /**< Input source scan format - interlaced or progressive.
++    *          For valid values see #System_VideoScanFormat. */
+ 
+ } VCAP_DEV_PARAM_S;
+ 
+diff --git a/dvr_rdk/mcfw/src_linux/links/ipcBitsIn/ipcBitsInLink_tsk.c b/dvr_rdk/mcfw/src_linux/links/ipcBitsIn/ipcBitsInLink_tsk.c
+index a115401..0c4d37f 100755
+--- a/dvr_rdk/mcfw/src_linux/links/ipcBitsIn/ipcBitsInLink_tsk.c
++++ b/dvr_rdk/mcfw/src_linux/links/ipcBitsIn/ipcBitsInLink_tsk.c
+@@ -302,7 +302,7 @@ Int32 IpcBitsInLink_putEmptyBitBufs(IpcBitsInLink_Obj * pObj,
+ 
+ #ifdef SYSTEM_DEBUG_IPC_RT
+     OSA_printf(" %d: IPC_BITS_IN   : Releasing %d bitbufs !!!\n",
+-               OSA_getCurTimeInMsec(), pBitBufList->numBitBufs);
++               OSA_getCurTimeInMsec(), pBitBufList->numBufs);
+ #endif
+     curTime = OSA_getCurTimeInMsec();
+     if (pBitBufList->numBufs)
+diff --git a/dvr_rdk/mcfw/src_linux/links/ipcFramesOut/ipcFramesOutLink_tsk.c b/dvr_rdk/mcfw/src_linux/links/ipcFramesOut/ipcFramesOutLink_tsk.c
+index eb47175..382196b 100755
+--- a/dvr_rdk/mcfw/src_linux/links/ipcFramesOut/ipcFramesOutLink_tsk.c
++++ b/dvr_rdk/mcfw/src_linux/links/ipcFramesOut/ipcFramesOutLink_tsk.c
+@@ -133,7 +133,10 @@ Int32 IpcFramesOutLink_create(IpcFramesOutLink_Obj * pObj,
+     pObj->info.queInfo[0] = pObj->createArgs.inQueInfo;
+ 
+     IpcFramesOutLink_initStats(pObj);
+-    IpcFramesOutLink_createPrdObj(pObj);
++    if (TRUE == pObj->createArgs.baseCreateParams.noNotifyMode)
++    {
++        IpcFramesOutLink_createPrdObj(pObj);
++    }
+ 
+     pObj->startProcessing = TRUE;
+ 
+@@ -162,7 +165,10 @@ Int32 IpcFramesOutLink_delete(IpcFramesOutLink_Obj * pObj)
+ 
+     OSA_queDelete(&pObj->listElemQue);
+     OSA_queDelete(&pObj->emptyFrameBufQue);
+-    IpcFramesOutLink_deletePrdObj(pObj);
++    if (TRUE == pObj->createArgs.baseCreateParams.noNotifyMode)
++    {
++        IpcFramesOutLink_deletePrdObj(pObj);
++    }
+     pObj->startProcessing = FALSE;
+ #ifdef SYSTEM_DEBUG_IPC
+     OSA_printf(" %d: IPC_FRAMES_OUT   : Delete Done !!!\n", OSA_getCurTimeInMsec());
+@@ -295,6 +301,7 @@ static Void IpcFramesOutLink_copyFrameInfo(IpcFramesOutLink_Obj * pObj,
+         /* force fieldIdx to zero since always addr[0] is only populated */
+         fieldIdx = 0;
+         dst->phyAddr[fieldIdx][i] = src->phyAddr[fieldIdx][i];
++        dst->addr[fieldIdx][i]    = src->addr[fieldIdx][i]; 
+         if (SYSTEM_MT_TILEDMEM == 
+             pObj->info.queInfo[0].chInfo[src->channelNum].memType)
+         {
+@@ -366,7 +373,7 @@ Int32 IpcFramesOutLink_processFrameBufs(IpcFramesOutLink_Obj * pObj,
+     {
+ #ifdef SYSTEM_DEBUG_IPC_RT
+         OSA_printf(" %d: IPC_FRAMES_OUT   : Received %d framebufs !!!\n",
+-                   OSA_getCurTimeInMsec(), bufList.numFrames);
++                   OSA_getCurTimeInMsec(), bufList->numFrames);
+ #endif
+ 
+         OSA_assert(bufList->numFrames <= VIDFRAME_MAX_FRAME_BUFS);
+@@ -716,7 +723,7 @@ Int32 IpcFramesOutLink_putFullVideoFrames(UInt32 linkId,
+     pObj = pTsk->appData;
+ #ifdef SYSTEM_DEBUG_IPC_RT
+     OSA_printf(" %d: IPC_FRAMES_OUT   : Sending %d framebufs !!!\n",
+-               OSA_getCurTimeInMsec(), pFrameBufList->numFrames);
++               OSA_getCurTimeInMsec(), bufList->numFrames);
+ #endif
+ 
+     if (bufList->numFrames)
+diff --git a/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vcap.c b/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vcap.c
+index 803564a..5f3afdf 100755
+--- a/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vcap.c
++++ b/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vcap.c
+@@ -58,13 +58,25 @@ Void Vcap_params_init(VCAP_PARAMS_S * pContext)
+     UInt16 devId, chnId, strmId;
+ 
+     memset(pContext, 0, sizeof(VCAP_PARAMS_S));
++#if defined (TI816X_CZ) || defined(TI816X_ETVH) || defined(TI8107_INS) || defined(TI816X_VCS)
+     for(devId = 0; devId < VCAP_DEV_MAX; devId++)
+     {
+-        pContext->deviceParams[devId].portEnable = FALSE;
+-        pContext->deviceParams[devId].portMode   = VCAP_MODE_BT656_8BIT_YUV422;
+-        pContext->deviceParams[devId].dataFormat = VCAP_MULTICHN_OPTION_4D1;
+-        pContext->deviceParams[devId].signalType = VS_AUTO_DETECT;
++        pContext->deviceParams[devId].portEnable = TRUE;
++        pContext->deviceParams[devId].videoCaptureMode   = SYSTEM_CAPT_VIDEO_CAPTURE_MODE_SINGLE_CH_NON_MUX_EMBEDDED_SYNC;
++        pContext->deviceParams[devId].videoIfMode = SYSTEM_CAPT_VIDEO_IF_MODE_16BIT;
++        pContext->deviceParams[devId].inDataFormat = SYSTEM_DF_YUV422P;
+     }
++#endif
++#if defined (TI816X_ETVS) || defined(TI816X_ES) || defined(TI816X_BTJX) || defined(TI816X_SBTJX) || defined(TI816X_HJ) || defined(TI816X_VRS)
++    for(devId = 0; devId < VCAP_DEV_MAX; devId++)
++    {
++        pContext->deviceParams[devId].portEnable = TRUE;
++        pContext->deviceParams[devId].videoCaptureMode   = SYSTEM_CAPT_VIDEO_CAPTURE_MODE_SINGLE_CH_NON_MUX_DISCRETE_SYNC_ACTVID_VSYNC;
++        pContext->deviceParams[devId].videoIfMode = SYSTEM_CAPT_VIDEO_IF_MODE_8BIT;
++        pContext->deviceParams[devId].inDataFormat = SYSTEM_DF_YUV422P;
++    }
++#endif
++ 
+     for(chnId = 0; chnId < VCAP_CHN_MAX; chnId++)
+     {
+         for(strmId=0; strmId<VCAP_STRM_MAX; strmId++)
+@@ -150,6 +162,9 @@ Int32 Vcap_init(VCAP_PARAMS_S * pContext)
+ 
+         memcpy(&gVcapModuleContext.vcapConfig, pContext, sizeof(VCAP_PARAMS_S));
+ 
++		/*Config Video Decoder*/
++		Vcap_configVideoDecoder(NULL,0);
++
+         gVcapModuleContext.numChannels = pContext->numChn;
+ 
+         gVcapModuleContext.isPalMode = FALSE;
+@@ -1764,10 +1779,59 @@ Int32 Vcap_configVideoDecoder(VCAP_DEVICE_CREATE_PARAM_S * deviceCreatePrm, UInt
+ {
+     Int32 status = 0;
+ 
++#ifdef TI816X_ETVH
++    Int32 i = 0,vipInstId;
++    VCAP_PARAMS_S *vcapConfig;
++    VCAP_DEVICE_CREATE_PARAM_S vidDecVideoCreatePrm[2];
++    
++    numDevices = 2;
++    vcapConfig = &gVcapModuleContext.vcapConfig;
++    for( i = 0 ; i < numDevices ; i ++) {
++        vipInstId                                           = SYSTEM_CAPTURE_INST_VIP0_PORTA + 2*i;
++        vidDecVideoCreatePrm[i].deviceId                    = DEVICE_VID_DEC_SII9233A_DRV;
++        vidDecVideoCreatePrm[i].vipInstId                   = vipInstId;
++        vidDecVideoCreatePrm[i].numChInDevice               = 1;
++        vidDecVideoCreatePrm[i].modeParams.videoCaptureMode = vcapConfig->deviceParams[vipInstId].videoCaptureMode;
++        vidDecVideoCreatePrm[i].modeParams.videoIfMode      = vcapConfig->deviceParams[vipInstId].videoIfMode;
++        vidDecVideoCreatePrm[i].modeParams.videoDataFormat  = vcapConfig->deviceParams[vipInstId].inDataFormat;
++        vidDecVideoCreatePrm[i].modeParams.standard         = vcapConfig->deviceParams[vipInstId].standard;
++        vidDecVideoCreatePrm[i].modeParams.videoSystem      =
++                                DEVICE_VIDEO_DECODER_VIDEO_SYSTEM_AUTO_DETECT;
++        vidDecVideoCreatePrm[i].modeParams.videoCropEnable  = FALSE;
++        vidDecVideoCreatePrm[i].modeParams.videoAutoDetectTimeout = -1;
++    }
++
+     if(gVcapModuleContext.vcapConfig.enableConfigExtVideoDecoder)
+     {
+-        Vcap_deviceCreate(deviceCreatePrm, numDevices);
++        Vcap_deviceCreate(vidDecVideoCreatePrm, numDevices);
+     }
++#endif
++#if defined(TI816X_CZ) || defined(TI8107_INS)
++    Int32 vipInstId;
++    VCAP_PARAMS_S *vcapConfig;
++    VCAP_DEVICE_CREATE_PARAM_S vidDecVideoCreatePrm;
++    
++    numDevices = 1;
++    vcapConfig = &gVcapModuleContext.vcapConfig;
++    
++    vipInstId                                        = SYSTEM_CAPTURE_INST_VIP0_PORTA;
++    vidDecVideoCreatePrm.deviceId                    = DEVICE_VID_DEC_SII9233A_DRV;
++    vidDecVideoCreatePrm.vipInstId                   = vipInstId;
++    vidDecVideoCreatePrm.numChInDevice               = 1;
++    vidDecVideoCreatePrm.modeParams.videoCaptureMode = vcapConfig->deviceParams[vipInstId].videoCaptureMode;
++    vidDecVideoCreatePrm.modeParams.videoIfMode      = vcapConfig->deviceParams[vipInstId].videoIfMode;
++    vidDecVideoCreatePrm.modeParams.videoDataFormat  = vcapConfig->deviceParams[vipInstId].inDataFormat;
++    vidDecVideoCreatePrm.modeParams.standard         = vcapConfig->deviceParams[vipInstId].standard;
++    vidDecVideoCreatePrm.modeParams.videoSystem      =
++                                DEVICE_VIDEO_DECODER_VIDEO_SYSTEM_AUTO_DETECT;
++    vidDecVideoCreatePrm.modeParams.videoCropEnable  = FALSE;
++    vidDecVideoCreatePrm.modeParams.videoAutoDetectTimeout = -1;
++
++    if(gVcapModuleContext.vcapConfig.enableConfigExtVideoDecoder)
++    {
++        Vcap_deviceCreate(&vidDecVideoCreatePrm, numDevices);
++    }
++#endif
+ 
+     return status;
+ }
+diff --git a/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vcap_device.c b/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vcap_device.c
+index cbd4947..458acbc 100755
+--- a/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vcap_device.c
++++ b/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vcap_device.c
+@@ -10,6 +10,7 @@
+ 
+ #include <tvp5158.h>
+ #include <tw2968.h>
++#include <sii9233a.h>
+ 
+ typedef struct {
+ 
+@@ -53,6 +54,13 @@ Int32 Vcap_deviceControl(UInt32 deviceNum, UInt32 cmd, Ptr inArgs, Ptr outArgs)
+                                    inArgs,
+                                    outArgs);
+         }
++        if(pDevice->createPrm.deviceId==DEVICE_VID_DEC_SII9233A_DRV)
++        {
++                status = Device_sii9233aControl(pDevice->deviceHandle,
++                                   cmd,
++                                   inArgs,
++                                   outArgs);
++        }
+     }
+     return status;
+ }
+@@ -82,7 +90,7 @@ Int32 Vcap_deviceCreate(VCAP_DEVICE_CREATE_PARAM_S *pPrm, UInt32 numDevices)
+         memset(&createArgs, 0, sizeof(Device_VideoDecoderCreateParams));
+ 
+         #if defined (TI_814X_BUILD) || defined (TI_8107_BUILD)
+-        createArgs.deviceI2cInstId    = 2;
++        createArgs.deviceI2cInstId    = 0;
+         #endif
+         #ifdef TI_816X_BUILD
+         createArgs.deviceI2cInstId    = 1;
+@@ -123,6 +131,15 @@ Int32 Vcap_deviceCreate(VCAP_DEVICE_CREATE_PARAM_S *pPrm, UInt32 numDevices)
+                                                          &createStatusArgs);
+         }
+ 
++        if(pDevice->createPrm.deviceId==DEVICE_VID_DEC_SII9233A_DRV)
++        {
++            pDevice->deviceHandle = Device_sii9233aCreate(
++                                                         pDevice->createPrm.deviceId,
++                                                         devId, // instId - need to change
++                                                         &createArgs,
++                                                         &createStatusArgs);
++        }
++
+         OSA_assert(pDevice->deviceHandle!=NULL);
+ 
+         status = Vcap_deviceControl(devId,
+@@ -212,6 +229,12 @@ Int32 Vcap_deviceDelete()
+                                    NULL);
+             }
+ 
++            if(pDevice->createPrm.deviceId==DEVICE_VID_DEC_SII9233A_DRV)
++            {
++                status |= Device_sii9233aDelete(pDevice->deviceHandle,
++                                   NULL);
++            }
++
+             pDevice->deviceHandle = NULL;
+         }
+     }
+diff --git a/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis.c b/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis.c
+index 0e9eb5a..79a5d5b 100755
+--- a/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis.c
++++ b/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis.c
+@@ -192,27 +192,78 @@ Void Vdis_params_init(VDIS_PARAMS_S * pContext)
+ #if defined (TI_8107_BUILD)
+     pContext->deviceParams[VDIS_DEV_HDCOMP].outputInfo.dvoFmt = VDIS_DVOFMT_TRIPLECHAN_DISCSYNC;
+ #endif
+-#if defined(TI816X_DVR) || defined(TI8107_DVR) || defined(TI8107_EVM)
++#if defined(TI816X_DVR) || defined(TI8107_DVR) || defined(TI8107_EVM) || defined(TI8107_INS)
+         pContext->deviceParams[VDIS_DEV_HDCOMP].outputInfo.dataFormat = SYSTEM_DF_RGB24_888;
+ #endif
+ #if defined (TI816X_EVM)
+         pContext->deviceParams[VDIS_DEV_HDCOMP].outputInfo.dataFormat = SYSTEM_DF_YUV444P;
+ #endif
+-    pContext->tiedDevicesMask = VDIS_VENC_HDCOMP | VDIS_VENC_DVO2;
+-    pContext->enableEdgeEnhancement = TRUE;
++#ifdef TI816X_CZ
++        pContext->deviceParams[VDIS_DEV_HDCOMP].outputInfo.dvoFmt = VDIS_DVOFMT_TRIPLECHAN_EMBSYNC;
++        pContext->deviceParams[VDIS_DEV_HDCOMP].outputInfo.dataFormat = SYSTEM_DF_YUV422P;
++#endif
++#ifdef TI816X_ETVH
++        pContext->deviceParams[VDIS_DEV_DVO2].outputInfo.dvoFmt = VDIS_DVOFMT_TRIPLECHAN_DISCSYNC;
++        pContext->deviceParams[VDIS_DEV_DVO2].outputInfo.dataFormat = SYSTEM_DF_RGB24_888;
++        pContext->deviceParams[VDIS_DEV_HDCOMP].outputInfo.dataFormat = SYSTEM_DF_YUV444P;
++        pContext->deviceParams[VDIS_DEV_HDCOMP].outputInfo.dvoFmt = VDIS_DVOFMT_TRIPLECHAN_EMBSYNC;
++#endif
++#ifdef TI816X_ETVS
++        pContext->deviceParams[VDIS_DEV_DVO2].outputInfo.dvoFmt = VDIS_DVOFMT_TRIPLECHAN_DISCSYNC;
++        pContext->deviceParams[VDIS_DEV_DVO2].outputInfo.dataFormat = SYSTEM_DF_RGB24_888;
++        pContext->deviceParams[VDIS_DEV_HDCOMP].outputInfo.dataFormat = SYSTEM_DF_YUV444P;
++        pContext->deviceParams[VDIS_DEV_HDCOMP].outputInfo.dvoFmt = VDIS_DVOFMT_TRIPLECHAN_EMBSYNC;
++#endif
++#ifdef TI816X_ES
++        pContext->deviceParams[VDIS_DEV_DVO2].outputInfo.dvoFmt = VDIS_DVOFMT_TRIPLECHAN_DISCSYNC;
++        pContext->deviceParams[VDIS_DEV_DVO2].outputInfo.dataFormat = SYSTEM_DF_RGB24_888;
++        pContext->deviceParams[VDIS_DEV_HDCOMP].outputInfo.dvoFmt = VDIS_DVOFMT_TRIPLECHAN_DISCSYNC;
++        pContext->deviceParams[VDIS_DEV_HDCOMP].outputInfo.dataFormat = SYSTEM_DF_RGB24_888;
++#endif
++#ifdef TI816X_BTJX
++#if 0//sdi out
++		pContext->deviceParams[VDIS_DEV_DVO2].outputInfo.dvoFmt = VDIS_DVOFMT_DOUBLECHAN;
++		pContext->deviceParams[VDIS_DEV_DVO2].outputInfo.dataFormat = SYSTEM_DF_YUV422SP_UV;
++#else//dvi out
++		pContext->deviceParams[VDIS_DEV_DVO2].outputInfo.dvoFmt = VDIS_DVOFMT_TRIPLECHAN_DISCSYNC;
++		pContext->deviceParams[VDIS_DEV_DVO2].outputInfo.dataFormat = SYSTEM_DF_RGB24_888;
++#endif
++		pContext->deviceParams[VDIS_DEV_HDCOMP].outputInfo.dvoFmt = VDIS_DVOFMT_TRIPLECHAN_DISCSYNC;
++		pContext->deviceParams[VDIS_DEV_HDCOMP].outputInfo.dataFormat = SYSTEM_DF_RGB24_888;
++#endif
++#ifdef TI816X_SBTJX
++        pContext->deviceParams[VDIS_DEV_DVO2].outputInfo.dvoFmt = VDIS_DVOFMT_TRIPLECHAN_DISCSYNC;
++        pContext->deviceParams[VDIS_DEV_DVO2].outputInfo.dataFormat = SYSTEM_DF_RGB24_888;
++#endif
++#ifdef TI816X_VCS
++        pContext->deviceParams[VDIS_DEV_DVO2].outputInfo.dvoFmt = VDIS_DVOFMT_TRIPLECHAN_DISCSYNC;
++        pContext->deviceParams[VDIS_DEV_DVO2].outputInfo.dataFormat = SYSTEM_DF_RGB24_888;
++        pContext->deviceParams[VDIS_DEV_HDCOMP].outputInfo.dataFormat = SYSTEM_DF_YUV444P;
++        pContext->deviceParams[VDIS_DEV_HDCOMP].outputInfo.dvoFmt = VDIS_DVOFMT_TRIPLECHAN_EMBSYNC;
++#endif
++#ifdef TI816X_VRS
++        pContext->deviceParams[VDIS_DEV_DVO2].outputInfo.dvoFmt = VDIS_DVOFMT_TRIPLECHAN_DISCSYNC;
++        pContext->deviceParams[VDIS_DEV_DVO2].outputInfo.dataFormat = SYSTEM_DF_RGB24_888;
++        pContext->deviceParams[VDIS_DEV_HDCOMP].outputInfo.dvoFmt = VDIS_DVOFMT_TRIPLECHAN_DISCSYNC;
++        pContext->deviceParams[VDIS_DEV_HDCOMP].outputInfo.dataFormat = SYSTEM_DF_RGB24_888;
++#endif
+ 
+ #endif
+ 
+-    pContext->deviceParams[SYSTEM_DC_VENC_HDMI].colorSpaceMode = VDIS_CSC_MODE_SDTV_VIDEO_Y2R;
+ 
+ #if defined(TI816X_EVM) || defined(TI8107_EVM) || defined(TI8107_DVR)
+     pContext->enableConfigExtThsFilter = TRUE;
+ #endif
+-
+-    pContext->enableLayoutGridDraw = FALSE;
++#if defined(TI816X_CZ) || defined(TI816X_ETVH) || defined(TI816X_ETVS) || defined(TI816X_ES) || defined(TI816X_BTJX) || defined(TI816X_SBTJX) || defined(TI816X_VCS) || defined(TI816X_VRS)
++    pContext->enableConfigExtVideoEncoder = TRUE;
++#endif
+ 
+     /* By default, enable the HDMI moniter thread */
+     pContext->enableHdmiControl = TRUE;
++    pContext->enableEdgeEnhancement = TRUE;
++    pContext->enableLayoutGridDraw = FALSE;
++    pContext->tiedDevicesMask = VDIS_VENC_HDCOMP | VDIS_VENC_DVO2;
++    pContext->deviceParams[SYSTEM_DC_VENC_HDMI].colorSpaceMode = VDIS_CSC_MODE_SDTV_VIDEO_Y2R;
+ }
+ 
+ /**
+@@ -299,6 +350,130 @@ Int32 Vdis_tiedVencInit(VDIS_DEV VdDevId1, VDIS_DEV VdDevId2, VDIS_PARAMS_S * pC
+ #endif
+     return 0;
+ }
++
++Void Vdis_configVideoEncoder(Void)
++{
++	Int32  status = 0;
++
++	if(gVdisModuleContext.vdisConfig.enableConfigExtVideoEncoder) {
++
++        Device_VideoEncoderCreateParams      encCreateParams;
++        Device_VideoEncoderCreateStatus      encCreateStatus;
++        Device_HdmiChipId                    hdmiId;
++        Device_SiI9022aHpdPrms               hpdPrms;
++        Device_SiI9022aModeParams            modePrms;
++        
++        /* Initialize and create video encoders */
++        
++        Device_sii9022aInit();
++        
++        /* Open HDMI Tx */
++        
++        encCreateParams.deviceI2cInstId = 1;
++        encCreateParams.deviceI2cAddr   = Device_getVidDecI2cAddr(
++                                                             DEVICE_VID_ENC_SII9022A_DRV,
++                                                             0);
++        encCreateParams.inpClk = 0;
++        encCreateParams.hdmiHotPlugGpioIntrLine = 0;
++        
++        encCreateParams.syncMode = DEVICE_VIDEO_ENCODER_EXTERNAL_SYNC;
++        encCreateParams.clkEdge = TRUE;
++
++        gVdisModuleContext.sii9022aHandle = Device_sii9022aCreate(DEVICE_VID_ENC_SII9022A_DRV,
++                                                         1, // instId - need to change
++                                                         &(encCreateParams),
++                                                         &(encCreateStatus));
++        status = Device_sii9022aControl(gVdisModuleContext.sii9022aHandle,
++                                        IOCTL_DEVICE_SII9022A_GET_DETAILED_CHIP_ID,
++                                        &hdmiId,
++                                        NULL);
++		if(status < 0)
++		{
++			printf("\n IOCTL_DEVICE_SII9022A_GET_DETAILED_CHIP_ID Failed!! This can happen because "
++					"\n 1. enableConfigExtVideoEncoder is set to TRUE and Sii9022A is absent in the system OR "
++					"\n 2. Loose connection between the board and the daugther card"
++				  );
++		}
++		OSA_assert(status >= 0);
++		
++		/*
++		 *  Modified by: zzx.
++		 *
++		 *  Date       : Jul 25, 2014.
++		 *
++		 *  Description:
++		 *
++		 *               Fixed bug in autorun mode Sii9022A reset delay.
++		 */
++
++retry_hpd:
++
++		status = Device_sii9022aControl(gVdisModuleContext.sii9022aHandle,
++                                           IOCTL_DEVICE_SII9022A_QUERY_HPD,
++                                           &hpdPrms,
++                                           NULL);
++		if(status < 0)
++		{
++			printf("\n IOCTL_DEVICE_SII9022A_QUERY_HPD Failed!! This can happen because "
++					"\n 1. enableConfigExtVideoEncoder is set to TRUE and Sii9022A is absent in the system OR "
++					"\n 2. Loose connection between the board and the daugther card"
++				  );
++			usleep(100000);
++			goto retry_hpd;
++		}
++		OSA_assert(status >= 0);
++
++        modePrms.standard = gVdisModuleContext.vdisConfig.deviceParams[VDIS_DEV_DVO2].resolution;
++
++        status = Device_sii9022aControl(gVdisModuleContext.sii9022aHandle,
++                                        IOCTL_DEVICE_VIDEO_ENCODER_SET_MODE,
++                                        &modePrms,
++                                        NULL);
++		if(status < 0)
++		{
++			printf("\n IOCTL_DEVICE_VIDEO_ENCODER_SET_MODE Failed!! This can happen because "
++					"\n 1. enableConfigExtVideoEncoder is set to TRUE and Sii9022A is absent in the system OR "
++					"\n 2. Loose connection between the board and the daugther card"
++				  );
++		}
++
++		OSA_assert(status >= 0);
++
++
++    }
++    
++    if(gVdisModuleContext.vdisConfig.enableConfigExtThsFilter) {
++
++        Device_Ths7360SfCtrl   thsCtrl;
++        UInt32                 standard;
++
++        Device_thsFiltersInit();
++
++        /* TBD : Retrieve from vdis  */
++        standard = gVdisModuleContext.vdisConfig.deviceParams[VDIS_DEV_HDCOMP].resolution;
++
++        /* THS is tied to HDCOMP/HDDAC only for EVM */
++        switch (standard) {
++            case VSYS_STD_720P_60:
++            case VSYS_STD_720P_50:
++            case VSYS_STD_1080I_60:
++            case VSYS_STD_1080I_50:
++            case VSYS_STD_1080P_30:
++                thsCtrl = DEVICE_THS7360_SF_HD_MODE;
++            break;
++
++            default:
++                case VSYS_STD_1080P_60:
++                case VSYS_STD_1080P_50:
++                    thsCtrl = DEVICE_THS7360_SF_TRUE_HD_MODE;
++                break;
++            }
++            Device_ths7360SetSfParams(thsCtrl);
++            Device_ths7360SetSdParams(DEVICE_THSFILTER_ENABLE_MODULE);
++
++    }
++}
++
+ /**
+  * \brief:
+  *      Initialize Vdis instance
+@@ -315,14 +490,6 @@ Int32 Vdis_init(VDIS_PARAMS_S * pContext)
+     UInt32 devId, isCfgProvided;
+     Int32  status = 0;
+ 
+-
+-    Device_VideoEncoderCreateParams      encCreateParams;
+-    Device_VideoEncoderCreateStatus      encCreateStatus;
+-    Device_HdmiChipId                    hdmiId;
+-    Device_SiI9022aHpdPrms               hpdPrms;
+-    Device_SiI9022aModeParams            modePrms;
+-
+-
+     for(devId = 0; devId < VDIS_DEV_MAX; devId++)
+     {
+         gVdisModuleContext.swMsId[devId] = SYSTEM_LINK_ID_INVALID;
+@@ -343,126 +510,11 @@ Int32 Vdis_init(VDIS_PARAMS_S * pContext)
+     {
+         isCfgProvided = TRUE;
+         memcpy(&gVdisModuleContext.vdisConfig, pContext, sizeof(VDIS_PARAMS_S));
++        Vdis_configVideoEncoder();
+ 
+-        if(gVdisModuleContext.vdisConfig.enableConfigExtVideoEncoder)
+-        {
+-
+-            /* Initialize and create video encoders */
+-
+-            Device_sii9022aInit();
+-
+-            /* Open HDMI Tx */
+-#if defined (TI_814X_BUILD) || defined (TI_8107_BUILD)
+-                encCreateParams.deviceI2cInstId = 2;
+-#endif
+-#ifdef TI_816X_BUILD
+-                encCreateParams.deviceI2cInstId = 1;
+-#endif
+-            encCreateParams.deviceI2cAddr   = Device_getVidDecI2cAddr(
+-                                                             DEVICE_VID_ENC_SII9022A_DRV,
+-                                                             0);
+-            encCreateParams.inpClk = 0;
+-            encCreateParams.hdmiHotPlugGpioIntrLine = 0;
+-
+-            encCreateParams.syncMode = DEVICE_VIDEO_ENCODER_EMBEDDED_SYNC;
+-            encCreateParams.clkEdge = FALSE;
+-
+-#if defined (TI_814X_BUILD) || defined (TI_8107_BUILD)
+-            encCreateParams.clkEdge = FALSE;
+-#endif /* TI_814X_BUILD */
+-
+-            gVdisModuleContext.sii9022aHandle =
+-                                  Device_sii9022aCreate(DEVICE_VID_ENC_SII9022A_DRV,
+-                                                         0, // instId - need to change
+-                                                         &(encCreateParams),
+-                                                         &(encCreateStatus));
+-
+-            status = Device_sii9022aControl(gVdisModuleContext.sii9022aHandle,
+-                                           IOCTL_DEVICE_SII9022A_GET_DETAILED_CHIP_ID,
+-                                           &hdmiId,
+-                                           NULL);
+-            if(status < 0)
+-            {
+-                printf("\n IOCTL_DEVICE_SII9022A_GET_DETAILED_CHIP_ID Failed!! This can happen because "
+-                       "\n 1. enableConfigExtVideoEncoder is set to TRUE and Sii9022A is absent in the system OR "
+-                       "\n 2. Loose connection between the board and the daugther card"
+-                      );
+-            }
+-            OSA_assert(status >= 0);
+-
+-            status = Device_sii9022aControl(gVdisModuleContext.sii9022aHandle,
+-                                           IOCTL_DEVICE_SII9022A_QUERY_HPD,
+-                                           &hpdPrms,
+-                                           NULL);
+-            if(status < 0)
+-            {
+-                printf("\n IOCTL_DEVICE_SII9022A_QUERY_HPD Failed!! This can happen because "
+-                       "\n 1. enableConfigExtVideoEncoder is set to TRUE and Sii9022A is absent in the system OR "
+-                       "\n 2. Loose connection between the board and the daugther card"
+-                      );
+-            }
+-            OSA_assert(status >= 0);
+-
+-
+-            modePrms.standard = VSYS_STD_1080P_60;
+-
+-            status = Device_sii9022aControl(gVdisModuleContext.sii9022aHandle,
+-                                           IOCTL_DEVICE_VIDEO_ENCODER_SET_MODE,
+-                                           &modePrms,
+-                                           NULL);
+-            if(status < 0)
+-            {
+-                printf("\n IOCTL_DEVICE_VIDEO_ENCODER_SET_MODE Failed!! This can happen because "
+-                       "\n 1. enableConfigExtVideoEncoder is set to TRUE and Sii9022A is absent in the system OR "
+-                       "\n 2. Loose connection between the board and the daugther card"
+-                      );
+-            }
+-
+-            OSA_assert(status >= 0);
+-
+-
+-        }
+-
+-        if(gVdisModuleContext.vdisConfig.enableConfigExtThsFilter)
+-        {
+-
+-
+-#if defined (TI816X_EVM) || defined (TI_8107_BUILD)
+-
+-            Device_Ths7360SfCtrl   thsCtrl;
+-            UInt32                 standard;
+-
+-            Device_thsFiltersInit();
+-
+-            /* TBD : Retrieve from vdis  */
+-            standard = VSYS_STD_1080P_60;
+-
+-            /* THS is tied to HDCOMP/HDDAC only for EVM */
+-            switch (standard)
+-            {
+-                case VSYS_STD_720P_60:
+-                case VSYS_STD_720P_50:
+-                case VSYS_STD_1080I_60:
+-                case VSYS_STD_1080I_50:
+-                case VSYS_STD_1080P_30:
+-                    thsCtrl = DEVICE_THS7360_SF_HD_MODE;
+-                    break;
+-
+-                default:
+-                case VSYS_STD_1080P_60:
+-                case VSYS_STD_1080P_50:
+-                    thsCtrl = DEVICE_THS7360_SF_TRUE_HD_MODE;
+-                    break;
+-            }
+-            Device_ths7360SetSfParams(thsCtrl);
+-            Device_ths7360SetSdParams(DEVICE_THSFILTER_ENABLE_MODULE);
+-
+-#endif
+-
+-        }
+-        for (devId = 0;devId < VDIS_DEV_MAX;devId++)
+-        {
+-            AvsyncLink_LinkSynchConfigParams_Init(&gVdisModuleContext.avsyncCfg[devId]);
++		for (devId = 0;devId < VDIS_DEV_MAX;devId++)
++		{
++			AvsyncLink_LinkSynchConfigParams_Init(&gVdisModuleContext.avsyncCfg[devId]);
+             gVdisModuleContext.avsyncCfg[devId].audioDevId       = AVSYNC_INVALID_AUDDEVID;
+             gVdisModuleContext.avsyncCfg[devId].displayLinkID    = SYSTEM_LINK_ID_DISPLAY_FIRST + devId;
+             gVdisModuleContext.avsyncCfg[devId].videoSynchLinkID = SYSTEM_LINK_ID_SW_MS_MULTI_INST_0 +
+@@ -1819,28 +1871,7 @@ Int32 Vdis_getSwMsId(VDIS_DEV vdDevId)
+     {
+         swMsId = SYSTEM_LINK_ID_INVALID;
+     }
+-#endif
+-
+-#if defined(TI_8107_BUILD)
+-    if( vdDevId == VDIS_DEV_HDMI)
+-    {
+-        swMsId = gVdisModuleContext.swMsId[0];
+-    }
+-    else if(( vdDevId == VDIS_DEV_DVO2) || ( vdDevId == VDIS_DEV_HDCOMP))
+-    {
+-        swMsId = gVdisModuleContext.swMsId[0];
+-    }
+-    else if(vdDevId == VDIS_DEV_SD)
+-    {
+-        swMsId = gVdisModuleContext.swMsId[1];
+-    }
+-    else
+-    {
+-        swMsId = SYSTEM_LINK_ID_INVALID;
+-    }
+-#endif
+-
+-#if defined(TI_816X_BUILD)
++#else
+ 
+     if( vdDevId == VDIS_DEV_HDMI)
+     {
+@@ -1884,28 +1915,8 @@ Int32 Vdis_getSwMsContextIndex(VDIS_DEV vdDevId)
+     {
+         swMsId = VDIS_DEV_MAX;
+     }
+-#endif
+-
+-#ifdef TI_8107_BUILD
+-    if( vdDevId == VDIS_DEV_HDMI)
+-    {
+-        swMsId = 0;
+-    }
+-    else if(( vdDevId == VDIS_DEV_DVO2) || ( vdDevId == VDIS_DEV_HDCOMP))
+-    {
+-        swMsId = 0;
+-    }
+-    else if(vdDevId == VDIS_DEV_SD)
+-    {
+-        swMsId = 1;
+-    }
+-    else
+-    {
+-        swMsId = SYSTEM_LINK_ID_INVALID;
+-    }
+-#endif
++#else
+ 
+-#ifdef TI_816X_BUILD
+     if( vdDevId == VDIS_DEV_HDMI)
+     {
+         swMsId = 0;
+diff --git a/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/multich_common.c b/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/multich_common.c
+index ccc2983..7791fa4 100755
+--- a/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/multich_common.c
++++ b/dvr_rdk/mcfw/src_linux/mcfw_api/usecases/multich_common.c
+@@ -276,13 +276,6 @@ Void MultiCh_swMsGetDefaultLayoutPrm(UInt32 devId, SwMsLink_CreateParams *swMsCr
+         winInfo->height = windowInfo->height;
+         winInfo->startX = windowInfo->start_X;
+         winInfo->startY = windowInfo->start_Y;
+-
+-        winInfo->originRatio  = windowInfo->originRatio;
+-        winInfo->adjustWidth  = windowInfo->adjustWidth;
+-        winInfo->adjustHeight = windowInfo->adjustHeight;
+-        winInfo->adjustX      = windowInfo->adjustX;
+-        winInfo->adjustY      = windowInfo->adjustY;
+-
+         winInfo->channelNum = mosaicParam->chnMap[winId];
+         winInfo->bypass = mosaicParam->useLowCostScaling[winId];
+       }
+diff --git a/dvr_rdk/mcfw/src_linux/osa/src/osa_thr.c b/dvr_rdk/mcfw/src_linux/osa/src/osa_thr.c
+index 43247a5..86c10f8 100755
+--- a/dvr_rdk/mcfw/src_linux/osa/src/osa_thr.c
++++ b/dvr_rdk/mcfw/src_linux/osa/src/osa_thr.c
+@@ -67,6 +67,7 @@ int OSA_thrDelete(OSA_ThrHndl *hndl)
+   {
+       status = pthread_cancel(hndl->hndl); 
+       status = OSA_thrJoin(hndl);
++      hndl->hndl = 0;
+   }
+   
+   return status;    
+-- 
+2.7.4
+
