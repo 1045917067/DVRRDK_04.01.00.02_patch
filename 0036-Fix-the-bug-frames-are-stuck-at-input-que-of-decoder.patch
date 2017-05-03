@@ -1,0 +1,62 @@
+From d8d8f64558b368c464c8f97585fab0a432ac462f Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Sun, 26 Jun 2016 21:13:49 +0800
+Subject: [PATCH 36/42] Fix the bug: frames are stuck at input que of decoder
+
+The patch ensure that declink NEW_DATA processing happens
+whenever a output buffer is freed and bitbuffers are queued
+at input of that channel
+---
+ .../links_m3video/iva_dec/decLink_common.c         | 26 ++++++++++++++++------
+ 1 file changed, 19 insertions(+), 7 deletions(-)
+
+diff --git a/dvr_rdk/mcfw/src_bios6/links_m3video/iva_dec/decLink_common.c b/dvr_rdk/mcfw/src_bios6/links_m3video/iva_dec/decLink_common.c
+index d03ce8a..2ba962f 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_m3video/iva_dec/decLink_common.c
++++ b/dvr_rdk/mcfw/src_bios6/links_m3video/iva_dec/decLink_common.c
+@@ -904,7 +904,11 @@ Int32 DecLink_codecFreeProcessedFrames(DecLink_Obj * pObj,
+     FVID2_Frame *origFrame;
+     System_FrameInfo *freeFrameInfo;
+     UInt cookie;
+-    Bool bufFreeDone = FALSE;
++    //Bool bufFreeDone = FALSE;
++	
++	Bool sendDataNotify = FALSE;
++
++	UInt32 chNum;
+ 
+     cookie = Hwi_disable();
+ 
+@@ -943,15 +947,23 @@ Int32 DecLink_codecFreeProcessedFrames(DecLink_Obj * pObj,
+                 status = Utils_bufPutEmptyFrameExt(&pObj->outObj.bufOutQue,
+                                                     freeFrame);
+                 UTILS_assert(!UTILS_ISERROR(status));
+-                bufFreeDone = TRUE;
+-            }
+-        }
++                //bufFreeDone = TRUE;
++
++                chNum = freeFrameInfo->allocPoolID;
++
++				if (!Utils_queIsEmpty(&(pObj->chObj[chNum].inQue)))
++				{
++					sendDataNotify = TRUE;
++				}
++			}
++		}
+     }
+ 
+     Hwi_restore(cookie);
+-    if ((TRUE == pObj->newDataProcessOnFrameFree)
+-      &&
+-      (bufFreeDone))
++    //if ((TRUE == pObj->newDataProcessOnFrameFree)
++      //&&
++      //(bufFreeDone))
++	if (sendDataNotify)
+     {
+         status = System_sendLinkCmd(pObj->linkId,
+                                     SYSTEM_CMD_NEW_DATA);
+-- 
+2.7.4
+
