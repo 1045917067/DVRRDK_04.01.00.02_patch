@@ -1,0 +1,234 @@
+From ddc2ec91f018b5a129117cbad730c435939c4d8e Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Fri, 10 Jun 2016 17:59:41 +0800
+Subject: [PATCH 12/42] Add routines to set HDMI edid.
+
+---
+ dvr_rdk/mcfw/interfaces/ti_vcap.h                  |  5 ++
+ .../src_linux/devices/inc/device_videoDecoder.h    | 40 +++++++++++++++
+ .../src_linux/devices/sii9233a/src/sii9233a_api.c  |  4 ++
+ .../src_linux/devices/sii9233a/src/sii9233a_i2c.c  | 57 ++++++++++++++++++++++
+ .../src_linux/devices/sii9233a/src/sii9233a_priv.h |  1 +
+ dvr_rdk/mcfw/src_linux/mcfw_api/ti_vcap.c          |  4 ++
+ dvr_rdk/mcfw/src_linux/mcfw_api/ti_vcap_device.c   | 16 ++++++
+ .../mcfw/src_linux/mcfw_api/ti_vcap_device_priv.h  |  1 +
+ 8 files changed, 128 insertions(+)
+
+diff --git a/dvr_rdk/mcfw/interfaces/ti_vcap.h b/dvr_rdk/mcfw/interfaces/ti_vcap.h
+index 4f82994..447d9f1 100755
+--- a/dvr_rdk/mcfw/interfaces/ti_vcap.h
++++ b/dvr_rdk/mcfw/interfaces/ti_vcap.h
+@@ -752,6 +752,11 @@ Int32 Vcap_setWrbkCaptScParams(UInt32 inW, UInt32 inH, UInt32 outW, UInt32 outH)
+ */
+ Int32 Vcap_stopWrbkCapt();
+ 
++/**
++    \brief This API is used to set capture driver's edid data.
++*/
++Int32 Vcap_setEdidData(UInt8 *pedid, UInt32 size);
++
+ 
+ #ifdef __cplusplus
+ }
+diff --git a/dvr_rdk/mcfw/src_linux/devices/inc/device_videoDecoder.h b/dvr_rdk/mcfw/src_linux/devices/inc/device_videoDecoder.h
+index 58b75e6..8ca6dae 100755
+--- a/dvr_rdk/mcfw/src_linux/devices/inc/device_videoDecoder.h
++++ b/dvr_rdk/mcfw/src_linux/devices/inc/device_videoDecoder.h
+@@ -321,6 +321,30 @@ Typicall API calling sequence for video decoder in context of video capture appl
+ #define IOCTL_DEVICE_SET_AUDIO_MODE    \
+             (DEVICE_VID_DEC_IOCTL_BASE + 0x1001)
+ 
++/*
++ *  Added by   : zzx.
++ *
++ *  Date       : Nov 11, 2013.
++ *
++ *  Description:
++ *
++ *  Add command to set HDMI edid data.
++ *
++ */
++/**
++  * \brief Set HDMI edid data.
++  *
++  * This IOCTL can be called by capture device.
++  *
++  * \param cmdArgs       [IN]   Device_EdidDataParams *
++  * \param cmdArgsStatus [OUT]  NULL
++  *
++  * \return FVID_SOK on success, else failure
++  *
++*/
++#define IOCTL_DEVICE_VIDEO_DECODER_SET_EDID \
++            (DEVICE_VID_DEC_IOCTL_BASE + 0x1002)
++
+ /* @} */
+ 
+ /**
+@@ -643,6 +667,22 @@ typedef struct
+ 
+ } Device_AudioModeParams;
+ 
++/*
++ *  Added by   : zzx.
++ *
++ *  Date       : Nov 11, 2013.
++ *
++ *  Description:
++ *
++ *  Add structure to set HDMI edid data.
++ *
++ */
++typedef struct
++{
++    UInt8  * pedid;
++    UInt32   size;
++} Device_EdidDataParams;
++
+ #endif  /*  _DEVICE_VIDEO_DECODER_H_  */
+ 
+ /*@}*/
+diff --git a/dvr_rdk/mcfw/src_linux/devices/sii9233a/src/sii9233a_api.c b/dvr_rdk/mcfw/src_linux/devices/sii9233a/src/sii9233a_api.c
+index 36e46a2..bebb62b 100755
+--- a/dvr_rdk/mcfw/src_linux/devices/sii9233a/src/sii9233a_api.c
++++ b/dvr_rdk/mcfw/src_linux/devices/sii9233a/src/sii9233a_api.c
+@@ -62,6 +62,10 @@ Int32 Device_sii9233aControl (Device_Handle handle,
+             status = Device_sii9233aGetVideoStatus ( pObj, cmdArgs, cmdStatusArgs);
+             break;
+ 
++        case IOCTL_DEVICE_VIDEO_DECODER_SET_EDID:
++            status = Device_sii9233aSetEDID ( pObj, cmdArgs);
++            break;
++
+         default:
+             status = -1;
+             break;
+diff --git a/dvr_rdk/mcfw/src_linux/devices/sii9233a/src/sii9233a_i2c.c b/dvr_rdk/mcfw/src_linux/devices/sii9233a/src/sii9233a_i2c.c
+index a529e3c..275fe28 100755
+--- a/dvr_rdk/mcfw/src_linux/devices/sii9233a/src/sii9233a_i2c.c
++++ b/dvr_rdk/mcfw/src_linux/devices/sii9233a/src/sii9233a_i2c.c
+@@ -284,6 +284,63 @@ Int32 Device_sii9233aSetupEDID(Device_Sii9233aObj *pObj)
+     return status;
+ }
+ 
++Int32 Device_sii9233aSetEDID(Device_Sii9233aObj *pObj, Device_EdidDataParams *prm)
++{
++    Int32 status = 0;
++    UInt16 i;
++    UInt8  regAddr[0x101];
++    UInt8  regValue[0x101];
++    UInt8  devAddr;
++    UInt32  numRegs;
++    Device_VideoDecoderCreateParams *pCreateArgs;
++    
++    UInt8 * edid = prm->pedid;
++
++    pCreateArgs = &pObj->createArgs;
++    devAddr = pCreateArgs->deviceI2cAddr[0] + DEVICE_SII9233A_I2C_EDID_OFFSET;
++
++    numRegs = 0;
++    regAddr[numRegs] = DEVICE_SII9233A_EDID_ENABLE;
++    regValue[numRegs] = 0x01;
++    numRegs++;
++
++    status = OSA_i2cWrite8(&pObj->i2cHandle, devAddr, regAddr, regValue, numRegs);
++    if ( status < 0 )
++        return -1;
++    
++    numRegs = 0;
++    regAddr[numRegs] = DEVICE_SII9233A_EDID_FIFO_SELECT;
++    regValue[numRegs] = 0x01;
++    numRegs++;
++
++    status = OSA_i2cWrite8(&pObj->i2cHandle, devAddr, regAddr, regValue, numRegs);
++    if ( status < 0 )
++        return -1;
++
++    numRegs = 0;
++    regAddr[numRegs] = DEVICE_SII9233A_EDID_FIFO_ADDR;
++    regValue[numRegs] = 0x00;
++    numRegs++;
++
++    status = OSA_i2cWrite8(&pObj->i2cHandle, devAddr, regAddr, regValue, numRegs);
++    if ( status < 0 )
++        return -1;
++    
++    numRegs = 0;
++    regValue[numRegs] = DEVICE_SII9233A_EDID_FIFO_DATA;
++    numRegs++;
++    for (i = 0; i < prm->size; i++) {
++        regValue[numRegs] = edid[i];
++        numRegs++;
++    }
++
++    status = OSA_i2cRawWrite8(&pObj->i2cHandle, devAddr, regValue, numRegs);
++    if ( status < 0 )
++        return -1;
++
++    return status;
++}
++
+ /*
+   Start output port
+ */
+diff --git a/dvr_rdk/mcfw/src_linux/devices/sii9233a/src/sii9233a_priv.h b/dvr_rdk/mcfw/src_linux/devices/sii9233a/src/sii9233a_priv.h
+index b8a36b5..e83dab7 100755
+--- a/dvr_rdk/mcfw/src_linux/devices/sii9233a/src/sii9233a_priv.h
++++ b/dvr_rdk/mcfw/src_linux/devices/sii9233a/src/sii9233a_priv.h
+@@ -168,4 +168,5 @@ Int32 Device_sii9233aGetVideoStatus(Device_Sii9233aObj *pObj,
+ Int32 Device_sii9233aSetSlaveAddress(Device_Sii9233aObj *pObj);
+ Int32 Device_sii9233aSetFactoryMode(Device_Sii9233aObj *pObj);
+ Int32 Device_sii9233aSetupEDID(Device_Sii9233aObj *pObj);
++Int32 Device_sii9233aSetEDID(Device_Sii9233aObj *pObj, Device_EdidDataParams *prm);
+ #endif /*  _DEVICE_SII9233A_PRIV_H_  */
+diff --git a/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vcap.c b/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vcap.c
+index 5f3afdf..f44c19e 100755
+--- a/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vcap.c
++++ b/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vcap.c
+@@ -2006,3 +2006,7 @@ Int32 Vcap_stopWrbkCapt()
+     return gVcapModuleContext.stopWrbkCaptFxn();
+ }
+ 
++Int32 Vcap_setEdidData(UInt8 *pedid, UInt32 size)
++{
++    return Vcap_deviceSetEdid(pedid, size);
++}
+diff --git a/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vcap_device.c b/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vcap_device.c
+index 458acbc..f066117 100755
+--- a/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vcap_device.c
++++ b/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vcap_device.c
+@@ -428,3 +428,19 @@ Bool Vcap_deviceIsPalMode()
+ 
+     return pDevice->isPalMode;
+ }
++
++Int32 Vcap_deviceSetEdid(UInt8 *pedid, UInt32 size)
++{
++    Int32 status = 0, devId;
++    Device_EdidDataParams edidParams;
++
++    edidParams.pedid = pedid;
++    edidParams.size  = size;
++
++    for(devId=0; devId<gVcapDeviceModuleContext.numDevices; devId++)
++    {
++        status |= Vcap_deviceControl(devId, IOCTL_DEVICE_VIDEO_DECODER_SET_EDID, &edidParams, NULL);
++    }
++
++    return status;
++}
+diff --git a/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vcap_device_priv.h b/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vcap_device_priv.h
+index e7b0d01..a9178bc 100755
+--- a/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vcap_device_priv.h
++++ b/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vcap_device_priv.h
+@@ -22,6 +22,7 @@ Int32 Vcap_deviceStop();
+ Int32 Vcap_deviceSetAudioParams(UInt32 numChannels, UInt32 samplingHz, UInt32 audioVolume);
+ Int32 Vcap_deviceGetSourceStatus(VCAP_VIDEO_SOURCE_STATUS_S *pPrm);
+ Int32 Vcap_deviceSetColor(Int32 contrast, Int32 brightness, Int32 saturation, Int32 hue, Int32 chId);
++Int32 Vcap_deviceSetEdid(UInt8 *pedid, UInt32 size);
+ Bool  Vcap_deviceIsPalMode();
+ 
+ #endif
+-- 
+2.7.4
+
