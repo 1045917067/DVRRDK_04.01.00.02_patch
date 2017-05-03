@@ -1,0 +1,500 @@
+From fa1ddeaf6a28cde6baf521daa6c022b00f5a4541 Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Fri, 24 Jun 2016 19:07:53 +0800
+Subject: [PATCH 33/42] Set noise filter strength dynamically
+
+Add NSF cmd to set noise filter strength only when nsf is not in bypass.
+---
+ .../demos/mcfw_api_demos/mcfw_demo/demo_capture.c  |   5 +
+ dvr_rdk/mcfw/interfaces/link_api/nsfLink.h         |  16 ++
+ dvr_rdk/mcfw/interfaces/ti_vcap.h                  |   6 +
+ .../mcfw/src_bios6/links_m3vpss/nsf/nsfLink_drv.c  | 300 ++++++++++++++++++++-
+ .../mcfw/src_bios6/links_m3vpss/nsf/nsfLink_priv.h |   1 +
+ .../mcfw/src_bios6/links_m3vpss/nsf/nsfLink_tsk.c  |   6 +
+ dvr_rdk/mcfw/src_linux/mcfw_api/ti_vcap.c          |  19 ++
+ 7 files changed, 342 insertions(+), 11 deletions(-)
+
+diff --git a/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/demo_capture.c b/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/demo_capture.c
+index b3e954b..d5ba78e 100755
+--- a/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/demo_capture.c
++++ b/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/demo_capture.c
+@@ -34,6 +34,7 @@ char gDemo_captureSettingsMenu[] = {
+     "\r\n k: Update SCD Analytics Config"
+     "\r\n l: Print SCD Analytics Config of All Channels"
+ #endif
++    "\r\n m: Set NSF strength"
+     "\r\n"
+     "\r\n p: Previous Menu"
+     "\r\n"
+@@ -853,6 +854,10 @@ int Demo_captureSettings(int demoId)
+             case 'l':
+                 Vcap_getDynamicParamChn(0, &params, VCAP_SCDPRINTVACHCONFIG);
+                 break;
++            case 'm' :
++                value = Demo_getIntValue("Set nsf strength (0-3)", 0, 3, 0);
++                Vcap_setNsfStrength(value);
++                break;
+             case 'p':
+                 done = TRUE;
+                 break;
+diff --git a/dvr_rdk/mcfw/interfaces/link_api/nsfLink.h b/dvr_rdk/mcfw/interfaces/link_api/nsfLink.h
+index 5eedf70..9f940d9 100755
+--- a/dvr_rdk/mcfw/interfaces/link_api/nsfLink.h
++++ b/dvr_rdk/mcfw/interfaces/link_api/nsfLink.h
+@@ -70,11 +70,25 @@ extern "C" {
+ */
+ #define NSF_LINK_CMD_PRINT_BUFFER_STATISTICS        (0x8003)
+ 
++/**
++    \brief Link CMD: Set NSF strength
++
++    \param NSF_LINK_NF_STRENGTH
++*/
++#define NSF_LINK_CMD_NSF_STRENGTH                   (0x8004)
++
+ /* @} */
+ 
+ /* Data structure's */
+ 
+ 
++typedef enum {
++    NSF_LINK_NF_STRENGTH_AUTO = 0,
++    NSF_LINK_NF_STRENGTH_LOW,
++    NSF_LINK_NF_STRENGTH_MIDDLE,
++    NSF_LINK_NF_STRENGTH_HIGH,
++} NSF_LINK_NF_STRENGTH;
++
+ typedef struct
+ {
+     System_LinkInQueParams      inQueParams;
+@@ -117,6 +131,8 @@ typedef struct
+     /**< Frames per seconds at which frames are generated at the output of NSF Link.
+          inputFrameRate + outputFrameRate should be set to control required fps */
+ 
++    NSF_LINK_NF_STRENGTH 		nsfStrength;
++
+ } NsfLink_CreateParams;
+ 
+ /**
+diff --git a/dvr_rdk/mcfw/interfaces/ti_vcap.h b/dvr_rdk/mcfw/interfaces/ti_vcap.h
+index 447d9f1..8ac199c 100755
+--- a/dvr_rdk/mcfw/interfaces/ti_vcap.h
++++ b/dvr_rdk/mcfw/interfaces/ti_vcap.h
+@@ -28,6 +28,7 @@ extern "C" {
+ #include "ti_vsys.h"
+ #include "link_api/algLink.h"
+ #include "link_api/captureLink.h"
++#include "link_api/nsfLink.h"
+ #include "common_def/ti_vcap_common_def.h"
+ 
+ /* =============================================================================
+@@ -757,6 +758,11 @@ Int32 Vcap_stopWrbkCapt();
+ */
+ Int32 Vcap_setEdidData(UInt8 *pedid, UInt32 size);
+ 
++/**
++    \brief This API is used to set noise filter strength
++*/
++Int32 Vcap_setNsfStrength(NSF_LINK_NF_STRENGTH nsfStrength);
++
+ 
+ #ifdef __cplusplus
+ }
+diff --git a/dvr_rdk/mcfw/src_bios6/links_m3vpss/nsf/nsfLink_drv.c b/dvr_rdk/mcfw/src_bios6/links_m3vpss/nsf/nsfLink_drv.c
+index db0188c..8ef24dc 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_m3vpss/nsf/nsfLink_drv.c
++++ b/dvr_rdk/mcfw/src_bios6/links_m3vpss/nsf/nsfLink_drv.c
+@@ -9,6 +9,183 @@
+ #include <mcfw/interfaces/link_api/system_tiler.h>
+ #include "nsfLink_priv.h"
+ 
++Vps_NsfProcessingCfg gNsfProcessingCfg[] = {
++  // Level 0
++  {
++    .staticFrameNoise[0] = 0,//REG8 B12-B0
++    .spatialStrengthLow[0] = 0xC,//REG2 B7-B0
++    .spatialStrengthHigh[0] = 0xC,//REG2 B15-B8
++
++    .staticFrameNoise[1] = 0,//REG9 B28-B16
++    .spatialStrengthLow[1] = 0x14,//REG3 B7-B0
++    .spatialStrengthHigh[1] = 0x14,//REG3 B15-B8
++
++    .staticFrameNoise[2] = 0,//REG9 B12-B0
++    .spatialStrengthLow[2] = 0x14,//REG3 B23-B16
++    .spatialStrengthHigh[2] = 0x14,//REG3 B31-B24
++
++    .temporalStrength = 0xB,//REG4 B5-B0
++    .temporalTriggerNoise = 0x6,//REG4 B11-B8
++    .noiseIirCoeff = 0xD,//REG5 B3-B0
++    .maxNoise = 0xA,//REG5 B8-B4
++    .pureBlackThres = 0x16,//REG6 B5-B0
++    .pureWhiteThres = 0x16,//REG6 B13-B8
++  }
++  ,
++    // Level 1
++    {
++      .staticFrameNoise[0] = 0,
++      .spatialStrengthLow[0] = 0x10,
++      .spatialStrengthHigh[0] = 0x10,
++
++      .staticFrameNoise[1] = 0,
++      .spatialStrengthLow[1] = 0x18,
++      .spatialStrengthHigh[1] = 0x18,
++
++      .staticFrameNoise[2] = 0,
++      .spatialStrengthLow[2] = 0x18,
++      .spatialStrengthHigh[2] = 0x18,
++
++      .temporalStrength = 0xF,
++      .temporalTriggerNoise = 0x6,
++      .noiseIirCoeff = 0xD,
++      .maxNoise = 0xA,
++      .pureBlackThres = 0x16,
++      .pureWhiteThres = 0x16,
++    }
++  ,
++    // Level 2
++    {
++      .staticFrameNoise[0] = 0,
++      .spatialStrengthLow[0] = 0x12,
++      .spatialStrengthHigh[0] = 0x12,
++
++      .staticFrameNoise[1] = 0,
++      .spatialStrengthLow[1] = 0x1C,
++      .spatialStrengthHigh[1] = 0x1C,
++
++      .staticFrameNoise[2] = 0,
++      .spatialStrengthLow[2] = 0x1C,
++      .spatialStrengthHigh[2] = 0x1C,
++
++      .temporalStrength = 0x12,
++      .temporalTriggerNoise = 0x6,
++      .noiseIirCoeff = 0xD,
++      .maxNoise = 0xC,
++      .pureBlackThres = 0x16,
++      .pureWhiteThres = 0x16,
++    }
++  ,
++    // Level 3
++    {
++      .staticFrameNoise[0] = 0,
++      .spatialStrengthLow[0] = 0x14,
++      .spatialStrengthHigh[0] = 0x14,
++
++      .staticFrameNoise[1] = 0,
++      .spatialStrengthLow[1] = 0x1E,
++      .spatialStrengthHigh[1] = 0x1E,
++
++      .staticFrameNoise[2] = 0,
++      .spatialStrengthLow[2] = 0x1E,
++      .spatialStrengthHigh[2] = 0x1E,
++
++      .temporalStrength = 0x14,
++      .temporalTriggerNoise = 0x6,
++      .noiseIirCoeff = 0xD,
++      .maxNoise = 0xD,
++      .pureBlackThres = 0x16,
++      .pureWhiteThres = 0x16,
++    }
++  ,
++    // Level 4
++    {
++      .staticFrameNoise[0] = 0,
++      .spatialStrengthLow[0] = 0x16,
++      .spatialStrengthHigh[0] = 0x16,
++
++      .staticFrameNoise[1] = 0,
++      .spatialStrengthLow[1] = 0x20,
++      .spatialStrengthHigh[1] = 0x20,
++
++      .staticFrameNoise[2] = 0,
++      .spatialStrengthLow[2] = 0x20,
++      .spatialStrengthHigh[2] = 0x20,
++
++      .temporalStrength = 0x16,
++      .temporalTriggerNoise = 0x6,
++      .noiseIirCoeff = 0xD,
++      .maxNoise = 0xF,
++      .pureBlackThres = 0x16,
++      .pureWhiteThres = 0x16,
++    }
++  ,
++    // Level 5
++    {
++      .staticFrameNoise[0] = 0,
++      .spatialStrengthLow[0] = 0x16,
++      .spatialStrengthHigh[0] = 0x16,
++
++      .staticFrameNoise[1] = 0,
++      .spatialStrengthLow[1] = 0x20,
++      .spatialStrengthHigh[1] = 0x20,
++
++      .staticFrameNoise[2] = 0,
++      .spatialStrengthLow[2] = 0x20,
++      .spatialStrengthHigh[2] = 0x20,
++
++      .temporalStrength = 0x30,
++      .temporalTriggerNoise = 0x6,
++      .noiseIirCoeff = 0xD,
++      .maxNoise = 0xF,
++      .pureBlackThres = 0x16,
++      .pureWhiteThres = 0x16,
++    }
++  ,
++    // Level 6
++    {
++      .staticFrameNoise[0] = 0,
++      .spatialStrengthLow[0] = 0x30,
++      .spatialStrengthHigh[0] = 0x30,
++
++      .staticFrameNoise[1] = 0,
++      .spatialStrengthLow[1] = 0x30,
++      .spatialStrengthHigh[1] = 0x30,
++
++      .staticFrameNoise[2] = 0,
++      .spatialStrengthLow[2] = 0x30,
++      .spatialStrengthHigh[2] = 0x30,
++
++      .temporalStrength = 0x30,
++      .temporalTriggerNoise = 0x6,
++      .noiseIirCoeff = 0xD,
++      .maxNoise = 0xF,
++      .pureBlackThres = 0x16,
++      .pureWhiteThres = 0x16,
++    }
++  ,
++    // Level 7
++    {
++      .staticFrameNoise[0] = 0,
++      .spatialStrengthLow[0] = 0x40,
++      .spatialStrengthHigh[0] = 0x40,
++
++      .staticFrameNoise[1] = 0,
++      .spatialStrengthLow[1] = 0x40,
++      .spatialStrengthHigh[1] = 0x40,
++
++      .staticFrameNoise[2] = 0,
++      .spatialStrengthLow[2] = 0x40,
++      .spatialStrengthHigh[2] = 0x40,
++
++      .temporalStrength = 0x30,
++      .temporalTriggerNoise = 0x6,
++      .noiseIirCoeff = 0xD,
++      .maxNoise = 0xF,
++      .pureBlackThres = 0x16,
++      .pureWhiteThres = 0x16,
++    }
++};
+ 
+ Int32 NsfLink_resetStatistics(NsfLink_Obj * pObj)
+ {
+@@ -658,7 +835,7 @@ Int32 NsfLink_drvDelete(NsfLink_Obj * pObj)
+ Int32 NsfLink_drvInitCh(NsfLink_Obj * pObj)
+ {
+     Int32 status;
+-    UInt32 i, chId, frameId, queueId, outChId, chPerQueue;
++    UInt32 chId, frameId, queueId, outChId, chPerQueue;
+     System_LinkChInfo *pInChInfo;
+     Vps_NsfDataFormat *nsfDataFmt;
+     Vps_NsfProcessingCfg *nsfProcCfg;
+@@ -666,6 +843,7 @@ Int32 NsfLink_drvInitCh(NsfLink_Obj * pObj)
+     FVID2_Format format;
+     NsfLink_ChObj *nsfChObj;
+     UInt32 numFrmsPerCh;
++	UInt32 level;
+ 
+     UTILS_assert(pObj != NULL);
+ 
+@@ -746,19 +924,56 @@ Int32 NsfLink_drvInitCh(NsfLink_Obj * pObj)
+         nsfProcCfg->subFrameModeEnable = FALSE;
+         nsfProcCfg->numLinesPerSubFrame = 128;
+ 
+-        for (i = 0; i < 3; i++)
++        switch (pObj->createArgs.nsfStrength)
+         {
+-            nsfProcCfg->staticFrameNoise[i] = 0;
+-            nsfProcCfg->spatialStrengthLow[i] = VPS_NSF_PROCESSING_CFG_DEFAULT;
+-            nsfProcCfg->spatialStrengthHigh[i] = VPS_NSF_PROCESSING_CFG_DEFAULT;
++          default:
++          case NSF_LINK_NF_STRENGTH_AUTO:
++          case NSF_LINK_NF_STRENGTH_MIDDLE:
++            level = 4;
++            break;
++
++          case NSF_LINK_NF_STRENGTH_LOW:
++            level = 1;
++            break;
++
++          case NSF_LINK_NF_STRENGTH_HIGH:
++            level = 7;
++            break;
+         }
+ 
+-        nsfProcCfg->temporalStrength = VPS_NSF_PROCESSING_CFG_DEFAULT;
+-        nsfProcCfg->temporalTriggerNoise = VPS_NSF_PROCESSING_CFG_DEFAULT;
+-        nsfProcCfg->noiseIirCoeff = VPS_NSF_PROCESSING_CFG_DEFAULT;
+-        nsfProcCfg->maxNoise = VPS_NSF_PROCESSING_CFG_DEFAULT;
+-        nsfProcCfg->pureBlackThres = VPS_NSF_PROCESSING_CFG_DEFAULT;
+-        nsfProcCfg->pureWhiteThres = VPS_NSF_PROCESSING_CFG_DEFAULT;
++        nsfProcCfg->staticFrameNoise[0] =
++            gNsfProcessingCfg[level].staticFrameNoise[0];
++        nsfProcCfg->spatialStrengthLow[0] =
++            gNsfProcessingCfg[level].spatialStrengthLow[0];
++        nsfProcCfg->spatialStrengthHigh[0] =
++            gNsfProcessingCfg[level].spatialStrengthHigh[0];
++
++        nsfProcCfg->staticFrameNoise[1] =
++            gNsfProcessingCfg[level].staticFrameNoise[1];
++        nsfProcCfg->spatialStrengthLow[1] =
++            gNsfProcessingCfg[level].spatialStrengthLow[1];
++        nsfProcCfg->spatialStrengthHigh[1] =
++            gNsfProcessingCfg[level].spatialStrengthHigh[1];
++
++        nsfProcCfg->staticFrameNoise[2] =
++            gNsfProcessingCfg[level].staticFrameNoise[2];
++        nsfProcCfg->spatialStrengthLow[2] =
++            gNsfProcessingCfg[level].spatialStrengthLow[2];
++        nsfProcCfg->spatialStrengthHigh[2] =
++            gNsfProcessingCfg[level].spatialStrengthHigh[2];
++
++        nsfProcCfg->temporalStrength =
++            gNsfProcessingCfg[level].temporalStrength;
++        nsfProcCfg->temporalTriggerNoise =
++            gNsfProcessingCfg[level].temporalTriggerNoise;
++        nsfProcCfg->noiseIirCoeff =
++            gNsfProcessingCfg[level].noiseIirCoeff;
++        nsfProcCfg->maxNoise =
++            gNsfProcessingCfg[level].maxNoise;
++        nsfProcCfg->pureBlackThres =
++            gNsfProcessingCfg[level].pureBlackThres;
++        nsfProcCfg->pureWhiteThres =
++            gNsfProcessingCfg[level].pureWhiteThres;
+ 
+         /*
+          * Per channel bufInQue structure needs to be created & initialized.
+@@ -968,3 +1183,66 @@ Int32 NsfLink_SetFrameRate(NsfLink_Obj * pObj, NsfLink_ChFpsParams * params)
+     }
+     return (status);
+ }
++
++Int32 NsfLink_drvSetNsfStrength(NsfLink_Obj * pObj, NSF_LINK_NF_STRENGTH  strength)
++{
++    UInt32 level;
++
++    switch (strength)
++    {
++      default:
++      case NSF_LINK_NF_STRENGTH_AUTO:
++        level = 4;
++        break;
++
++      case NSF_LINK_NF_STRENGTH_MIDDLE:
++        level = 4;
++        break;
++
++      case NSF_LINK_NF_STRENGTH_LOW:
++        level = 1;
++        break;
++
++      case NSF_LINK_NF_STRENGTH_HIGH:
++        level = 7;
++        break;
++    }   Vps_NsfProcessingCfg *nsfProcCfg = pObj->nsfCreateParams.processingCfg;
++
++    UTILS_assert(level <= 7);
++
++    nsfProcCfg->staticFrameNoise[0] =
++      gNsfProcessingCfg[level].staticFrameNoise[0];
++    nsfProcCfg->spatialStrengthLow[0] =
++      gNsfProcessingCfg[level].spatialStrengthLow[0];
++    nsfProcCfg->spatialStrengthHigh[0] =
++      gNsfProcessingCfg[level].spatialStrengthHigh[0];
++
++    nsfProcCfg->staticFrameNoise[1] =
++      gNsfProcessingCfg[level].staticFrameNoise[1];
++    nsfProcCfg->spatialStrengthLow[1] =
++      gNsfProcessingCfg[level].spatialStrengthLow[1];
++    nsfProcCfg->spatialStrengthHigh[1] =
++      gNsfProcessingCfg[level].spatialStrengthHigh[1];
++
++    nsfProcCfg->staticFrameNoise[2] =
++      gNsfProcessingCfg[level].staticFrameNoise[2];
++    nsfProcCfg->spatialStrengthLow[2] =
++      gNsfProcessingCfg[level].spatialStrengthLow[2];
++    nsfProcCfg->spatialStrengthHigh[2] =
++      gNsfProcessingCfg[level].spatialStrengthHigh[2];
++
++    nsfProcCfg->temporalStrength =
++      gNsfProcessingCfg[level].temporalStrength;
++    nsfProcCfg->temporalTriggerNoise =
++      gNsfProcessingCfg[level].temporalTriggerNoise;
++    nsfProcCfg->noiseIirCoeff =
++      gNsfProcessingCfg[level].noiseIirCoeff;
++    nsfProcCfg->maxNoise =
++      gNsfProcessingCfg[level].maxNoise;
++    nsfProcCfg->pureBlackThres =
++      gNsfProcessingCfg[level].pureBlackThres;
++    nsfProcCfg->pureWhiteThres =
++      gNsfProcessingCfg[level].pureWhiteThres;
++
++    return FVID2_control(pObj->fvidHandleNsf, IOCTL_VPS_NSF_SET_PROCESSING_CFG, nsfProcCfg, NULL);
++}
+diff --git a/dvr_rdk/mcfw/src_bios6/links_m3vpss/nsf/nsfLink_priv.h b/dvr_rdk/mcfw/src_bios6/links_m3vpss/nsf/nsfLink_priv.h
+index 824f56e..a01efe6 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_m3vpss/nsf/nsfLink_priv.h
++++ b/dvr_rdk/mcfw/src_bios6/links_m3vpss/nsf/nsfLink_priv.h
+@@ -170,6 +170,7 @@ Int32 NsfLink_drvInitCh(NsfLink_Obj * pObj);
+ Int32 NsfLink_drvFreeFrames(NsfLink_Obj * pObj);
+ Int32 NsfLink_SetFrameRate(NsfLink_Obj * pObj, NsfLink_ChFpsParams * params);
+ 
++Int32 NsfLink_drvSetNsfStrength(NsfLink_Obj * pObj, NSF_LINK_NF_STRENGTH  strength);
+ Int32 NsfLink_drvPrintStatistics(NsfLink_Obj * pObj, Bool resetAfterPrint);
+ Int32 NsfLink_resetStatistics(NsfLink_Obj *pObj);
+ Int32 NsfLink_printBufferStatus(NsfLink_Obj * pObj);
+diff --git a/dvr_rdk/mcfw/src_bios6/links_m3vpss/nsf/nsfLink_tsk.c b/dvr_rdk/mcfw/src_bios6/links_m3vpss/nsf/nsfLink_tsk.c
+index ade7210..ccebde7 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_m3vpss/nsf/nsfLink_tsk.c
++++ b/dvr_rdk/mcfw/src_bios6/links_m3vpss/nsf/nsfLink_tsk.c
+@@ -73,6 +73,12 @@ Int32 NsfLink_tskRun(NsfLink_Obj * pObj,
+                 Utils_tskAckOrFreeMsg(pRunMsg, status);
+                 break;
+ 
++            case NSF_LINK_CMD_NSF_STRENGTH:
++                pObj->createArgs.nsfStrength = *(NSF_LINK_NF_STRENGTH*)Utils_msgGetPrm(pRunMsg);
++                NsfLink_drvSetNsfStrength(pObj, pObj->createArgs.nsfStrength);
++                Utils_tskAckOrFreeMsg(pRunMsg, status);
++                break;
++
+             case SYSTEM_CMD_STOP:
+                 flushCmds[0] = SYSTEM_CMD_NEW_DATA;
+                 Utils_tskFlushMsg(pTsk, flushCmds, 1);
+diff --git a/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vcap.c b/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vcap.c
+index bd3c1ee..376ab8d 100755
+--- a/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vcap.c
++++ b/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vcap.c
+@@ -1915,3 +1915,22 @@ Int32 Vcap_setEdidData(UInt8 *pedid, UInt32 size)
+ {
+     return Vcap_deviceSetEdid(pedid, size);
+ }
++
++/**
++    \brief This API is used to set noise filter srength
++*/
++Int32 Vcap_setNsfStrength(NSF_LINK_NF_STRENGTH nsfStrength)
++{
++    int status = 0;
++
++    if(gVcapModuleContext.nsfId[0] != SYSTEM_LINK_ID_INVALID)
++    {
++      status = System_linkControl(gVcapModuleContext.nsfId[0], 
++                                  NSF_LINK_CMD_NSF_STRENGTH,
++                                  &nsfStrength , 
++                                  sizeof(NSF_LINK_NF_STRENGTH), 
++                                  TRUE);
++    }
++
++    return (status);
++}
+-- 
+2.7.4
+
