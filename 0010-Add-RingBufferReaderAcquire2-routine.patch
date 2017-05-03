@@ -1,0 +1,103 @@
+From feec7b2b5a5cd0434ec7c026856e12118af65c2d Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Fri, 10 Jun 2016 17:55:07 +0800
+Subject: [PATCH 10/42] Add RingBufferReaderAcquire2 routine.
+
+---
+ dvr_rdk/mcfw/src_common/utils/inc/ringbuf.h |  1 +
+ dvr_rdk/mcfw/src_common/utils/src/ringbuf.c | 67 +++++++++++++++++++++++++++++
+ 2 files changed, 68 insertions(+)
+
+diff --git a/dvr_rdk/mcfw/src_common/utils/inc/ringbuf.h b/dvr_rdk/mcfw/src_common/utils/inc/ringbuf.h
+index 22cc242..5492f27 100755
+--- a/dvr_rdk/mcfw/src_common/utils/inc/ringbuf.h
++++ b/dvr_rdk/mcfw/src_common/utils/inc/ringbuf.h
+@@ -72,6 +72,7 @@ Void* RingBufferWriterAcquire(RingBufferHandle_t *ringBufferHndl, UInt32 reqLeng
+ Int32 RingBufferWriterRelease(RingBufferHandle_t *ringBufferHndl, UInt32 writeLength);
+ Int32 RingBufferWriterCancel(RingBufferHandle_t *ringBufferHndl);
+ Void* RingBufferReaderAcquire(RingBufferHandle_t *ringBufferHndl, UInt32 *reqLength);
++Void* RingBufferReaderAcquire2(RingBufferHandle_t *ringBufferHndl, UInt32 *reqLength);
+ Int32 RingBufferReaderRelease(RingBufferHandle_t *ringBufferHndl, UInt32 readLength);
+ Int32 RingBufferReaderCancel(RingBufferHandle_t *ringBufferHndl);
+ Int32 RingBufferDeInit(RingBufferHandle_t *ringBufferHndl);
+diff --git a/dvr_rdk/mcfw/src_common/utils/src/ringbuf.c b/dvr_rdk/mcfw/src_common/utils/src/ringbuf.c
+index 8e79b2e..86793eb 100755
+--- a/dvr_rdk/mcfw/src_common/utils/src/ringbuf.c
++++ b/dvr_rdk/mcfw/src_common/utils/src/ringbuf.c
+@@ -588,6 +588,73 @@ Void* RingBufferReaderAcquire(RingBufferHandle_t *ringBufferHndl, UInt32 *reqLen
+     return ptr;
+ }
+ 
++/**
++    \brief    Acquire buffer pointer for reading data.
++     Available reader size is determined by wrReleaseLen which is intially 0.
++     Each acquire should be followed by release or cancel API.
++     Multiple Acquire calls not possible. 
++     If the reader pointer reaches towards the end and the effective total length of ring buffer 
++     was REDUCED earlier due to discontinuities, it will be restored.
++    
++     This API will return valid pointer length is available. 
++
++    \param  ringBufferHndl                [IN]  Ring buffer context
++    \param  reqLength                      [IN]  Required Buffer size 
++
++    \return   Returns a valid buffer pointer on SUCCESS else NULL pointer
++*/
++Void* RingBufferReaderAcquire2(RingBufferHandle_t *ringBufferHndl, UInt32 *reqLength)
++{
++    Void *ptr = NULL;
++    Int32 avail;
++    Int32 status = RINGBUF_OK;
++
++    RING_BUF_TRACE_PRINT("%s %d> %d", __FUNCTION__, __LINE__, *reqLength);
++
++    RingBufferAcquireLock(&ringBufferHndl->lock);
++
++    if (ringBufferHndl->rdAcquireLen)
++    {
++        RingBufferPrintError(RING_BUF_DEBUG_INFO, RING_BUF_READER, RING_BUF_ERROR_ALREADY_ACQUIRED);
++        status |= RINGBUF_FAIL;
++    }
++    /* wrReleaseLen is added to check if some data is written, if not reader cannot acquire */
++    if (ringBufferHndl->wrReleaseLen == 0) 
++    {
++//        RingBufferPrintError(RING_BUF_DEBUG_INFO, RING_BUF_WRITER, RING_BUF_ERROR_DATA_EMPTY);
++        status |= RINGBUF_FAIL;
++    }
++
++    if (status == RINGBUF_OK)
++    {
++        avail = RingBufferAvailableSize(ringBufferHndl->rdAcquirePtr, ringBufferHndl->wrReleasePtr, ringBufferHndl->usableSize);
++        if (avail >= *reqLength)
++        {
++            ptr = (Void*) (ringBufferHndl->baseAddr + ringBufferHndl->rdAcquirePtr);
++
++            RingBufferIncrementPtr(&ringBufferHndl->rdAcquirePtr, *reqLength, ringBufferHndl->usableSize);
++            ringBufferHndl->rdAcquireLen += *reqLength;
++            ringBufferHndl->wrReleaseLen -= *reqLength;
++        
++            ringBufferHndl->readAcquireCount++;
++        }
++        else
++        {
++            ptr = (Void*) (ringBufferHndl->baseAddr + ringBufferHndl->rdAcquirePtr);
++
++            RingBufferIncrementPtr(&ringBufferHndl->rdAcquirePtr, avail, ringBufferHndl->usableSize);
++            ringBufferHndl->rdAcquireLen += avail;
++            ringBufferHndl->wrReleaseLen -= avail;
++        
++            ringBufferHndl->readAcquireCount++;
++            *reqLength = avail;
++        }    
++    }
++    
++    RingBufferReleaseLock(&ringBufferHndl->lock);
++    return ptr;
++}
++
+ 
+ /**
+     \brief    Release buffer pointer after reading data.
+-- 
+2.7.4
+
