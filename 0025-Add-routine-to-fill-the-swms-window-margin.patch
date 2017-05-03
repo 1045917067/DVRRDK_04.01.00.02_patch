@@ -1,0 +1,280 @@
+From 926c6e1d805636bcd18af51b03cdc03fa151ae76 Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Fri, 10 Jun 2016 18:58:04 +0800
+Subject: [PATCH 25/42] Add routine to fill the swms window margin.
+
+---
+ dvr_rdk/mcfw/src_bios6/cfg/ti810x/link_hdvpss.cmd  |   3 +
+ .../src_bios6/links_m3vpss/swMs/swMsLink_drv.c     | 230 +++++++++++++++++++++
+ 2 files changed, 233 insertions(+)
+
+diff --git a/dvr_rdk/mcfw/src_bios6/cfg/ti810x/link_hdvpss.cmd b/dvr_rdk/mcfw/src_bios6/cfg/ti810x/link_hdvpss.cmd
+index 4428bcb..d56151f 100755
+--- a/dvr_rdk/mcfw/src_bios6/cfg/ti810x/link_hdvpss.cmd
++++ b/dvr_rdk/mcfw/src_bios6/cfg/ti810x/link_hdvpss.cmd
+@@ -84,10 +84,13 @@ SECTIONS
+     -ldvr_rdk_bios6.aem3<nsfLink_tsk.oem3>(.text)
+   } load >>  OCMC0_VPSS_M3_RAM, run >> OCMC0_VPSS_M3_RAM_MAPPED
+ */
++
++/*
+   .text_swmsLink {
+     -ldvr_rdk_bios6.aem3<swMsLink_drv.oem3>(.text)
+     -ldvr_rdk_bios6.aem3<swMsLink_tsk.oem3>(.text)
+   } load >>  OCMC0_VPSS_M3_RAM, run >> OCMC0_VPSS_M3_RAM_MAPPED
++*/
+ 
+   .text_captureLink {
+     -ldvr_rdk_bios6.aem3<captureLink_drv.oem3>(.text)
+diff --git a/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_drv.c b/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_drv.c
+index 3712483..3089bf9 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_drv.c
++++ b/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_drv.c
+@@ -293,6 +293,232 @@ Int32 SwMsLink_drvDoDma(SwMsLink_Obj * pObj, FVID2_Frame *pFrame)
+     return status;
+ }
+ 
++Int32 SwMsLink_drvDoDma2(SwMsLink_Obj * pObj, FVID2_Frame *pFrame)
++{
++    Int32 status = 0,i;
++    SwMsLink_LayoutWinInfo *pWinInfo = NULL;
++    Utils_DmaFill2D lineInfo[SWMS_LINK_DMA_GRID_MAX_TRANSFERS];
++
++    UInt16 thickness, numTx;
++
++    UInt32 pitch;
++
++    thickness = 4;
++
++    pitch = pObj->outFrameFormat.pitch[0];
++
++    numTx=0;
++
++    for(i = 0;i < pObj->layoutParams.numWin; i++)
++    {
++        pWinInfo = &pObj->layoutParams.winInfo[i];
++
++        if (!pWinInfo->originRatio ||
++             ((pWinInfo->width == pWinInfo->adjustWidth) && (pWinInfo->height == pWinInfo->adjustHeight))) {
++
++			/*Horizontal Top line*/
++			lineInfo[numTx].destAddr[0] = pFrame->addr[0][0];
++			lineInfo[numTx].destPitch[0] = pitch;
++			if (pObj->createArgs.outDataFormat == SYSTEM_DF_YUV420SP_UV)
++			{
++				lineInfo[numTx].destAddr[1] = pFrame->addr[0][1];
++				lineInfo[numTx].destPitch[1] = pObj->outFrameFormat.pitch[1];
++			}
++			lineInfo[numTx].dataFormat  = pObj->createArgs.outDataFormat;
++			lineInfo[numTx].width = pObj->layoutParams.winInfo[i].width;
++			lineInfo[numTx].height = thickness;
++			lineInfo[numTx].fillColorYUYV =
++				UTILS_DMA_GENERATE_FILL_PATTERN(SW_MS_GRID_FILL_PIXEL_LUMA ,
++						SW_MS_GRID_FILL_PIXEL_CHROMA,
++						SW_MS_GRID_FILL_PIXEL_CHROMA);
++
++			lineInfo[numTx].fastFillColorIndex = UTILS_DMA_FAST_FILL_COLOR_WHITE;
++
++			lineInfo[numTx].startX = pObj->layoutParams.winInfo[i].startX;
++			lineInfo[numTx].startY = pObj->layoutParams.winInfo[i].startY;
++			numTx++;
++
++			/*Horizontal Bottom line*/
++			lineInfo[numTx].destAddr[0] = pFrame->addr[0][0];
++			lineInfo[numTx].destPitch[0] = pitch;
++			lineInfo[numTx].dataFormat  = pObj->createArgs.outDataFormat;
++			if (pObj->createArgs.outDataFormat == SYSTEM_DF_YUV420SP_UV)
++			{
++				lineInfo[numTx].destAddr[1] = pFrame->addr[0][1];
++				lineInfo[numTx].destPitch[1] = pObj->outFrameFormat.pitch[1];
++			}
++			lineInfo[numTx].width = pObj->layoutParams.winInfo[i].width;
++			lineInfo[numTx].height = thickness;
++			lineInfo[numTx].fillColorYUYV =
++				UTILS_DMA_GENERATE_FILL_PATTERN(SW_MS_GRID_FILL_PIXEL_LUMA ,
++						SW_MS_GRID_FILL_PIXEL_CHROMA,
++						SW_MS_GRID_FILL_PIXEL_CHROMA);
++
++			lineInfo[numTx].fastFillColorIndex = UTILS_DMA_FAST_FILL_COLOR_WHITE;
++
++			lineInfo[numTx].startX = pObj->layoutParams.winInfo[i].startX;
++			lineInfo[numTx].startY = pObj->layoutParams.winInfo[i].startY +
++				pObj->layoutParams.winInfo[i].height - thickness;
++			numTx++;
++
++			/*Vertical Left side*/
++			lineInfo[numTx].destAddr[0] = pFrame->addr[0][0];
++			lineInfo[numTx].destPitch[0] = pitch;
++			lineInfo[numTx].dataFormat  = pObj->createArgs.outDataFormat;
++			if (pObj->createArgs.outDataFormat == SYSTEM_DF_YUV420SP_UV)
++			{
++				lineInfo[numTx].destAddr[1] = pFrame->addr[0][1];
++				lineInfo[numTx].destPitch[1] = pObj->outFrameFormat.pitch[1];
++			}
++			lineInfo[numTx].width = thickness;
++			lineInfo[numTx].height = pObj->layoutParams.winInfo[i].height;
++			lineInfo[numTx].fillColorYUYV =
++				UTILS_DMA_GENERATE_FILL_PATTERN(SW_MS_GRID_FILL_PIXEL_LUMA ,
++						SW_MS_GRID_FILL_PIXEL_CHROMA,
++						SW_MS_GRID_FILL_PIXEL_CHROMA);
++
++			lineInfo[numTx].fastFillColorIndex = UTILS_DMA_FAST_FILL_COLOR_WHITE;
++
++			lineInfo[numTx].startX = pObj->layoutParams.winInfo[i].startX +
++				pObj->layoutParams.winInfo[i].width - thickness;
++			lineInfo[numTx].startY = pObj->layoutParams.winInfo[i].startY;
++			numTx++;
++
++			/*Vertical right side*/
++			lineInfo[numTx].destAddr[0] = pFrame->addr[0][0];
++			lineInfo[numTx].destPitch[0] = pitch;
++			lineInfo[numTx].dataFormat  = pObj->createArgs.outDataFormat;
++			if (pObj->createArgs.outDataFormat == SYSTEM_DF_YUV420SP_UV)
++			{
++				lineInfo[numTx].destAddr[1] = pFrame->addr[0][1];
++				lineInfo[numTx].destPitch[1] = pObj->outFrameFormat.pitch[1];
++			}
++			lineInfo[numTx].width = thickness;
++			lineInfo[numTx].height =  pObj->layoutParams.winInfo[i].height;
++			lineInfo[numTx].fillColorYUYV =
++				UTILS_DMA_GENERATE_FILL_PATTERN(SW_MS_GRID_FILL_PIXEL_LUMA ,
++						SW_MS_GRID_FILL_PIXEL_CHROMA,
++						SW_MS_GRID_FILL_PIXEL_CHROMA);
++
++			lineInfo[numTx].fastFillColorIndex = UTILS_DMA_FAST_FILL_COLOR_WHITE;
++
++			lineInfo[numTx].startX = pObj->layoutParams.winInfo[i].startX;
++			lineInfo[numTx].startY = pObj->layoutParams.winInfo[i].startY;
++			numTx++;
++
++			UTILS_assert(numTx<=SWMS_LINK_DMA_GRID_MAX_TRANSFERS);
++
++			status = Utils_dmaFastFill2D(&pObj->gridDmaObj, lineInfo, numTx);
++			numTx = 0;
++
++
++			continue;
++		}
++
++        if (pWinInfo->width == pWinInfo->adjustWidth) {
++            /*Horizontal Top line*/
++            lineInfo[numTx].destAddr[0] = pFrame->addr[0][0];
++            lineInfo[numTx].destPitch[0] = pitch;
++            if (pObj->createArgs.outDataFormat == SYSTEM_DF_YUV420SP_UV)
++            {
++                lineInfo[numTx].destAddr[1] = pFrame->addr[0][1];
++                lineInfo[numTx].destPitch[1] = pObj->outFrameFormat.pitch[1];
++            }
++            lineInfo[numTx].dataFormat  = pObj->createArgs.outDataFormat;
++            lineInfo[numTx].width = pObj->layoutParams.winInfo[i].width;
++            lineInfo[numTx].height = SystemUtils_align(pWinInfo->adjustY, 2);
++            lineInfo[numTx].fillColorYUYV =
++                UTILS_DMA_GENERATE_FILL_PATTERN(SW_MS_BLANK_FRAME_PIXEL_LUMA ,
++                        SW_MS_BLANK_FRAME_PIXEL_CHROMA,
++                        SW_MS_BLANK_FRAME_PIXEL_CHROMA);
++
++            lineInfo[numTx].fastFillColorIndex = UTILS_DMA_FAST_FILL_COLOR_BLACK;
++
++            lineInfo[numTx].startX = pObj->layoutParams.winInfo[i].startX;
++            lineInfo[numTx].startY = pObj->layoutParams.winInfo[i].startY;
++            numTx++;
++
++            /*Horizontal Bottom line*/
++            lineInfo[numTx].destAddr[0] = pFrame->addr[0][0];
++            lineInfo[numTx].destPitch[0] = pitch;
++            lineInfo[numTx].dataFormat  = pObj->createArgs.outDataFormat;
++            if (pObj->createArgs.outDataFormat == SYSTEM_DF_YUV420SP_UV)
++            {
++                lineInfo[numTx].destAddr[1] = pFrame->addr[0][1];
++                lineInfo[numTx].destPitch[1] = pObj->outFrameFormat.pitch[1];
++            }
++            lineInfo[numTx].width = pObj->layoutParams.winInfo[i].width;
++            lineInfo[numTx].height = SystemUtils_align(pWinInfo->height - (pWinInfo->adjustY + pWinInfo->adjustHeight), 2);
++            lineInfo[numTx].fillColorYUYV =
++                UTILS_DMA_GENERATE_FILL_PATTERN(SW_MS_BLANK_FRAME_PIXEL_LUMA ,
++                        SW_MS_BLANK_FRAME_PIXEL_CHROMA,
++                        SW_MS_BLANK_FRAME_PIXEL_CHROMA);
++
++            lineInfo[numTx].fastFillColorIndex = UTILS_DMA_FAST_FILL_COLOR_BLACK;
++
++            lineInfo[numTx].startX = pObj->layoutParams.winInfo[i].startX;
++#if 0
++            lineInfo[numTx].startY = pObj->layoutParams.winInfo[i].startY +
++                pObj->layoutParams.winInfo[i].height - thickness;
++#else
++            lineInfo[numTx].startY = SystemUtils_align(pWinInfo->startY + pWinInfo->adjustY + pWinInfo->adjustHeight, 2);
++#endif
++            numTx++;
++        } else {
++            /*Vertical Left side*/
++            lineInfo[numTx].destAddr[0] = pFrame->addr[0][0];
++            lineInfo[numTx].destPitch[0] = pitch;
++            lineInfo[numTx].dataFormat  = pObj->createArgs.outDataFormat;
++            if (pObj->createArgs.outDataFormat == SYSTEM_DF_YUV420SP_UV)
++            {
++                lineInfo[numTx].destAddr[1] = pFrame->addr[0][1];
++                lineInfo[numTx].destPitch[1] = pObj->outFrameFormat.pitch[1];
++            }
++            lineInfo[numTx].width = SystemUtils_align(pWinInfo->adjustX, 2);
++            lineInfo[numTx].height = pObj->layoutParams.winInfo[i].height;
++            lineInfo[numTx].fillColorYUYV =
++                UTILS_DMA_GENERATE_FILL_PATTERN(SW_MS_BLANK_FRAME_PIXEL_LUMA ,
++                        SW_MS_BLANK_FRAME_PIXEL_CHROMA,
++                        SW_MS_BLANK_FRAME_PIXEL_CHROMA);
++
++            lineInfo[numTx].fastFillColorIndex = UTILS_DMA_FAST_FILL_COLOR_BLACK;
++
++            lineInfo[numTx].startX = pObj->layoutParams.winInfo[i].startX;
++            lineInfo[numTx].startY = pObj->layoutParams.winInfo[i].startY;
++            numTx++;
++
++            /*Vertical Right side*/
++            lineInfo[numTx].destAddr[0] = pFrame->addr[0][0];
++            lineInfo[numTx].destPitch[0] = pitch;
++            lineInfo[numTx].dataFormat  = pObj->createArgs.outDataFormat;
++            if (pObj->createArgs.outDataFormat == SYSTEM_DF_YUV420SP_UV)
++            {
++                lineInfo[numTx].destAddr[1] = pFrame->addr[0][1];
++                lineInfo[numTx].destPitch[1] = pObj->outFrameFormat.pitch[1];
++            }
++            lineInfo[numTx].width = SystemUtils_align(pWinInfo->width - (pWinInfo->adjustX + pWinInfo->adjustWidth), 2);
++            lineInfo[numTx].height =  pObj->layoutParams.winInfo[i].height;
++            lineInfo[numTx].fillColorYUYV =
++                UTILS_DMA_GENERATE_FILL_PATTERN(SW_MS_BLANK_FRAME_PIXEL_LUMA ,
++                        SW_MS_BLANK_FRAME_PIXEL_CHROMA,
++                        SW_MS_BLANK_FRAME_PIXEL_CHROMA);
++
++            lineInfo[numTx].fastFillColorIndex = UTILS_DMA_FAST_FILL_COLOR_BLACK;
++
++            lineInfo[numTx].startX = SystemUtils_align(pObj->layoutParams.winInfo[i].startX + pWinInfo->adjustX + pWinInfo->adjustWidth, 2);
++            lineInfo[numTx].startY = pObj->layoutParams.winInfo[i].startY;
++            numTx++;
++        }
++
++        UTILS_assert(numTx<=SWMS_LINK_DMA_GRID_MAX_TRANSFERS);
++
++        status = Utils_dmaFastFill2D(&pObj->gridDmaObj, lineInfo, numTx);
++        numTx = 0;
++    }
++
++    return status;
++}
++
+ static
+ Int32 SwMsLink_drvCheckBlankOutputBuffer(SwMsLink_Obj * pObj, FVID2_Frame *pFrame)
+ {
+@@ -3913,7 +4139,11 @@ Int32 SwMsLink_drvDoScaling(SwMsLink_Obj * pObj)
+ 
+     if(pObj->createArgs.enableLayoutGridDraw == TRUE)
+     {
++#if 0
+         SwMsLink_drvDoDma(pObj,pOutFrame);
++#else
++        SwMsLink_drvDoDma2(pObj,pOutFrame);
++#endif
+     }
+ 
+     key = Hwi_disable();
+-- 
+2.7.4
+
