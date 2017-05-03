@@ -1,0 +1,65 @@
+From 67907eaa2bd5ff84fe7ddfa808d1b7cdb70dbc94 Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Sun, 18 Sep 2016 10:44:15 +0800
+Subject: [PATCH 42/42] Fix the bug: scalingMatrixPreset
+
+---
+ .../src_bios6/links_m3video/iva_enc/encLink_h264.c | 29 ++++++++++++++++++++++
+ 1 file changed, 29 insertions(+)
+
+diff --git a/dvr_rdk/mcfw/src_bios6/links_m3video/iva_enc/encLink_h264.c b/dvr_rdk/mcfw/src_bios6/links_m3video/iva_enc/encLink_h264.c
+index 3eab511..cb5a0ef 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_m3video/iva_enc/encLink_h264.c
++++ b/dvr_rdk/mcfw/src_bios6/links_m3video/iva_enc/encLink_h264.c
+@@ -1023,9 +1023,23 @@ static Int enclink_h264_set_static_params(IH264ENC_Params * staticParams,
+     staticParams->enableWatermark = algCreateParams->enableWaterMarking;
+     staticParams->videnc2Params.rateControlPreset = IVIDEO_USER_DEFINED;
+     staticParams->rateControlParams.rateControlParamsPreset = IH264_RATECONTROLPARAMS_USERDEFINED;
++    /*
++     *  Modified by: zzx.
++     *
++     *  Date       : Sep 14, 2016.
++     *
++     *  Description:
++     *
++     *               Fix the bug: set scalingMatrixPreset = IH264_SCALINGMATRIX_NONE when
++	 *               IH264_HIGH_PROFILE == algCreateParams->profile
++     */
++#if 0
+     staticParams->rateControlParams.scalingMatrixPreset = 
+         (IH264_HIGH_PROFILE == algCreateParams->profile) 
+         ? IH264_SCALINGMATRIX_NORMAL: IH264_SCALINGMATRIX_NONE;
++#else
++    staticParams->rateControlParams.scalingMatrixPreset = IH264_SCALINGMATRIX_NONE;
++#endif
+     staticParams->rateControlParams.rcAlgo = algCreateParams->rateControlPreset;
+     staticParams->rateControlParams.enablePartialFrameSkip = TRUE;
+     staticParams->videnc2Params.maxBitRate = algCreateParams->maxBitRate;
+@@ -1406,9 +1420,24 @@ static Int enclink_h264_set_dynamic_params(
+ 
+     dynamicParams->rateControlParams.rateControlParamsPreset
+         = IH264_RATECONTROLPARAMS_USERDEFINED;
++    /*
++     *  Modified by: zzx.
++     *
++     *  Date       : Sep 14, 2016.
++     *
++     *  Description:
++     *
++     *               Fix the bug: set scalingMatrixPreset = IH264_SCALINGMATRIX_NONE when
++	 *               IH264_HIGH_PROFILE == algCreateParams->profile
++     */
++#if 0
+     dynamicParams->rateControlParams.scalingMatrixPreset =
+         (IH264_HIGH_PROFILE == algCreateParams->profile) 
+         ? IH264_SCALINGMATRIX_NORMAL: IH264_SCALINGMATRIX_NONE;
++#else
++    dynamicParams->rateControlParams.scalingMatrixPreset
++        = IH264_SCALINGMATRIX_NONE;
++#endif
+     dynamicParams->rateControlParams.qpMinI = algDynamicParams->qpMinI;
+     dynamicParams->rateControlParams.qpMaxI = algDynamicParams->qpMaxI;
+     dynamicParams->rateControlParams.qpI    = algDynamicParams->qpInitI;
+-- 
+2.7.4
+
