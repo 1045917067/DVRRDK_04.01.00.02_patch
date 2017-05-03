@@ -1,0 +1,38 @@
+From 545c8d8dc6ef8adbf1ec3be835fb67333dfe3912 Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Fri, 10 Jun 2016 18:06:43 +0800
+Subject: [PATCH 17/42] Fixed bug in user defined colorKey.
+
+---
+ .../mcfw/src_bios6/links_c6xdsp/alg_link/swosd/osdLink_alg.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/dvr_rdk/mcfw/src_bios6/links_c6xdsp/alg_link/swosd/osdLink_alg.c b/dvr_rdk/mcfw/src_bios6/links_c6xdsp/alg_link/swosd/osdLink_alg.c
+index f868d51..afc45f3 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_c6xdsp/alg_link/swosd/osdLink_alg.c
++++ b/dvr_rdk/mcfw/src_bios6/links_c6xdsp/alg_link/swosd/osdLink_alg.c
+@@ -70,9 +70,21 @@ Int32 AlgLink_OsdalgCreate(AlgLink_OsdObj * pObj)
+         pSwOsdObj->videoWindowPrm.height = pObj->inQueInfo->chInfo[chId].height;
+         pSwOsdObj->videoWindowPrm.lineOffset = pObj->inQueInfo->chInfo[chId].pitch[0];
+         pSwOsdObj->graphicsWindowPrm.format = -1;
++		/*
++		 *  Modified by: zzx.
++		 *
++		 *  Date       : Jul 25, 2014.
++		 *
++		 *  Description:
++		 *
++		 *               To use the user define colorKey.
++		 */
++
++#if 0
+         pChObj->colorKey[0] = 0xFF; /* Y */
+         pChObj->colorKey[1] = 0xFF; /* U */
+         pChObj->colorKey[2] = 0xFF; /* V */
++#endif
+     }
+ 
+ 	return FVID2_SOK;
+-- 
+2.7.4
+
