@@ -1,0 +1,2250 @@
+From 19846077633b514f8e7ce72f6a77b74322215ec7 Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Fri, 10 Jun 2016 19:00:36 +0800
+Subject: [PATCH 26/42] Add a helloWorld algorithms link.
+
+---
+ .../demos/link_api_demos/chains/chains_CapdspDis.c | 255 +++++++++
+ dvr_rdk/demos/link_api_demos/common/chains.h       |   1 +
+ dvr_rdk/demos/link_api_demos/common/chains_main.c  |  26 +
+ dvr_rdk/mcfw/interfaces/link_api/helloWorldLink.h  | 148 ++++++
+ dvr_rdk/mcfw/interfaces/link_api/system_linkId.h   |   8 +
+ dvr_rdk/mcfw/src_bios6/Makefile                    |   4 +-
+ .../mcfw/src_bios6/alg/helloWorldAlg/SRC_FILES.MK  |  13 +
+ .../alg/helloWorldAlg/src/helloWorldAlg.h          | 137 +++++
+ .../alg/helloWorldAlg/src/helloWorldAlg_TI_ialg.c  | 365 +++++++++++++
+ .../alg/helloWorldAlg/src/helloWorldAlg_TI_priv.h  |  56 ++
+ .../src_bios6/cfg/ti816x/config_1G_128MLinux.bld   |   4 +-
+ .../src_bios6/cfg/ti816x/config_1G_256MLinux.bld   |   4 +-
+ dvr_rdk/mcfw/src_bios6/links_c6xdsp/SRC_FILES.MK   |   7 +-
+ .../links_c6xdsp/helloWorld/helloWorldLink_priv.c  | 590 +++++++++++++++++++++
+ .../links_c6xdsp/helloWorld/helloWorldLink_priv.h  |  64 +++
+ .../links_c6xdsp/helloWorld/helloWorldLink_tsk.c   | 291 ++++++++++
+ .../src_bios6/links_c6xdsp/system/system_c6xdsp.c  |   3 +
+ .../links_common/system/system_priv_common.h       |   2 +
+ dvr_rdk/mcfw/src_linux/mcfw_api/ti_vsys_priv.h     |   1 +
+ 19 files changed, 1972 insertions(+), 7 deletions(-)
+ create mode 100644 dvr_rdk/demos/link_api_demos/chains/chains_CapdspDis.c
+ create mode 100755 dvr_rdk/mcfw/interfaces/link_api/helloWorldLink.h
+ create mode 100755 dvr_rdk/mcfw/src_bios6/alg/helloWorldAlg/SRC_FILES.MK
+ create mode 100755 dvr_rdk/mcfw/src_bios6/alg/helloWorldAlg/src/helloWorldAlg.h
+ create mode 100755 dvr_rdk/mcfw/src_bios6/alg/helloWorldAlg/src/helloWorldAlg_TI_ialg.c
+ create mode 100755 dvr_rdk/mcfw/src_bios6/alg/helloWorldAlg/src/helloWorldAlg_TI_priv.h
+ create mode 100755 dvr_rdk/mcfw/src_bios6/links_c6xdsp/helloWorld/helloWorldLink_priv.c
+ create mode 100755 dvr_rdk/mcfw/src_bios6/links_c6xdsp/helloWorld/helloWorldLink_priv.h
+ create mode 100755 dvr_rdk/mcfw/src_bios6/links_c6xdsp/helloWorld/helloWorldLink_tsk.c
+
+diff --git a/dvr_rdk/demos/link_api_demos/chains/chains_CapdspDis.c b/dvr_rdk/demos/link_api_demos/chains/chains_CapdspDis.c
+new file mode 100644
+index 0000000..e6b0e27
+--- /dev/null
++++ b/dvr_rdk/demos/link_api_demos/chains/chains_CapdspDis.c
+@@ -0,0 +1,255 @@
++/** =====================================================================
++ * chains_CapDis.c
++ *
++ * Author	: zzx
++ * Date		: June 24, 2013
++ * Discription:	Cap + Dis
++ *	
++ *	capture->dsp->display 
++ *  =====================================================================
++ */
++
++/* -------------------- Include user headers   ------------------------ */
++
++#include <mcfw/interfaces/ti_vcap.h>
++#include <demos/link_api_demos/common/chains.h>
++#include <demos/link_api_demos/common/chains_ipcBuf.h>
++#include <demos/link_api_demos/common/chains_ipcFrames.h>
++#include <mcfw/interfaces/link_api/helloWorldLink.h>
++
++Void Chains_CapdspDis(Chains_Ctrl *chainsCfg)
++{
++
++	CaptureLink_CreateParams			capturePrm;
++	CaptureLink_VipInstParams			*pCaptureInstPrm;
++	CaptureLink_OutParams				*pCaptureOutPrm;
++	IpcFramesInLinkRTOS_CreateParams    ipcFramesInDspPrm;
++	IpcFramesOutLinkRTOS_CreateParams   ipcFramesOutVpssPrm;	
++	HelloWorldLink_CreateParams     	helloWorldPrm;	
++	DisplayLink_CreateParams			displayPrm;
++
++	Uint32 captureId,vipInstId;
++	UInt32 helloWorldId;
++	Uint32 ipcFramesOutVpssId, ipcFramesInDspId;
++	Uint32 displayId;
++	Uint32 i;
++
++	CHAINS_INIT_STRUCT(CaptureLink_CreateParams,capturePrm);
++	CHAINS_INIT_STRUCT(IpcFramesInLinkRTOS_CreateParams,ipcFramesInDspPrm);
++	CHAINS_INIT_STRUCT(IpcFramesOutLinkRTOS_CreateParams,ipcFramesOutVpssPrm);
++	CHAINS_INIT_STRUCT(HelloWorldLink_CreateParams, helloWorldPrm);
++	CHAINS_INIT_STRUCT(DisplayLink_CreateParams,displayPrm);
++
++	captureId	   		= SYSTEM_LINK_ID_CAPTURE;
++	helloWorldId       	= SYSTEM_LINK_ID_HELLOWORLD_0;
++	ipcFramesOutVpssId 	= SYSTEM_VPSS_LINK_ID_IPC_FRAMES_OUT_0;
++	ipcFramesInDspId   	= SYSTEM_DSP_LINK_ID_IPC_FRAMES_IN_0;
++	displayId 	   		= SYSTEM_LINK_ID_DISPLAY_0;	
++
++
++	for(i = 0;i < gChains_ctrl.chRecNum; i++)
++	{
++		gChains_ctrl.chCfg[i + gChains_ctrl.chCapNum].channel = i;
++	}
++
++
++	/*
++	 * cap + dsp + dis
++	 */
++	VCAP_PARAMS_S  prm;
++	Vcap_params_init(&prm);
++	if(chainsCfg->chCapNum > 0)
++	{
++
++		capturePrm.numVipInst               = 1;//chainsCfg->chCapNum;
++		capturePrm.tilerEnable              = FALSE;
++		capturePrm.numBufsPerCh             = 16;
++		capturePrm.numExtraBufs             = 0;
++		capturePrm.maxBlindAreasPerCh       = 0;
++		capturePrm.isPalMode                = FALSE;
++		capturePrm.enableSdCrop             = FALSE;
++		capturePrm.doCropInCapture          = FALSE;
++
++		for(i = 0; i < capturePrm.numVipInst; i++)
++		{
++
++#if defined(TI816X_ETVH)
++			vipInstId =	SYSTEM_CAPTURE_INST_VIP0_PORTA + 2 * gChains_ctrl.chCfg[i].channel;
++			pCaptureInstPrm				= &capturePrm.vipInst[i];
++			pCaptureInstPrm->videoIfMode		= SYSTEM_CAPT_VIDEO_IF_MODE_16BIT;
++#endif
++#if defined(TI816X_ETVS)
++			vipInstId =	SYSTEM_CAPTURE_INST_VIP0_PORTA + 1 * gChains_ctrl.chCfg[i].channel;
++			pCaptureInstPrm				= &capturePrm.vipInst[i];
++			pCaptureInstPrm->videoIfMode		= SYSTEM_CAPT_VIDEO_IF_MODE_8BIT;
++			pCaptureInstPrm->videoCaptureMode	= SYSTEM_CAPT_VIDEO_CAPTURE_MODE_SINGLE_CH_NON_MUX_DISCRETE_SYNC_ACTVID_VSYNC;
++#endif
++#if defined(TI8107_INS)
++			vipInstId =	SYSTEM_CAPTURE_INST_VIP0_PORTA + 2 * gChains_ctrl.chCfg[i].channel;
++			pCaptureInstPrm						= &capturePrm.vipInst[i];
++			pCaptureInstPrm->videoIfMode		= SYSTEM_CAPT_VIDEO_IF_MODE_16BIT;
++#endif
++
++			prm.channelParams[i].deviceId		= vipInstId;
++
++			prm.enableConfigExtVideoDecoder 	= TRUE;
++			prm.deviceParams[vipInstId].standard	= chainsCfg->chCfg[i].inStd;
++
++			pCaptureInstPrm->vipInstId			= vipInstId%SYSTEM_CAPTURE_INST_MAX;
++			pCaptureInstPrm->inScanFormat		= SYSTEM_SF_PROGRESSIVE;
++			pCaptureInstPrm->inDataFormat		= SYSTEM_DF_YUV422P;
++			pCaptureInstPrm->standard			= chainsCfg->chCfg[i].inStd;
++			pCaptureInstPrm->numOutput			= 1;
++			pCaptureInstPrm->numChPerOutput		= 1;
++			
++			pCaptureOutPrm					= &pCaptureInstPrm->outParams[0];
++			pCaptureOutPrm->dataFormat		= SYSTEM_DF_YUV422I_YUYV;
++			pCaptureOutPrm->scEnable		= FALSE;
++			pCaptureOutPrm->outQueId		= i;
++
++			
++			capturePrm.outQueParams[i].nextLink	= ipcFramesOutVpssId;
++		}
++
++	}
++
++	ipcFramesOutVpssPrm.baseCreateParams.inQueParams.prevLinkId     = captureId;
++	ipcFramesOutVpssPrm.baseCreateParams.inQueParams.prevLinkQueId  = 0;
++	ipcFramesOutVpssPrm.baseCreateParams.notifyPrevLink             = FALSE;
++
++	ipcFramesOutVpssPrm.baseCreateParams.numOutQue                  = 1;
++	ipcFramesOutVpssPrm.baseCreateParams.outQueParams[0].nextLink   = displayId;
++	ipcFramesOutVpssPrm.baseCreateParams.notifyNextLink             = TRUE;
++
++	ipcFramesOutVpssPrm.baseCreateParams.processLink                = ipcFramesInDspId;
++	ipcFramesOutVpssPrm.baseCreateParams.notifyProcessLink          = TRUE;
++	ipcFramesOutVpssPrm.baseCreateParams.noNotifyMode               = FALSE;
++
++	ipcFramesInDspPrm.baseCreateParams.inQueParams.prevLinkId       = ipcFramesOutVpssId;
++	ipcFramesInDspPrm.baseCreateParams.inQueParams.prevLinkQueId    = 0;
++	ipcFramesInDspPrm.baseCreateParams.numOutQue                    = 1;
++	ipcFramesInDspPrm.baseCreateParams.outQueParams[0].nextLink     = helloWorldId;
++	ipcFramesInDspPrm.baseCreateParams.notifyPrevLink               = FALSE;
++	ipcFramesInDspPrm.baseCreateParams.notifyNextLink               = TRUE;
++	ipcFramesInDspPrm.baseCreateParams.noNotifyMode                 = FALSE;
++
++	helloWorldPrm.inQueParams.prevLinkId    = ipcFramesInDspId;
++	helloWorldPrm.inQueParams.prevLinkQueId = 0;
++
++
++	/****************************************************************/
++
++
++	Chains_displayCtrlInit(chainsCfg->displayRes);
++
++
++	displayPrm.numInputQueues					= 1;
++	displayPrm.activeQueue						= 0;
++	displayPrm.inQueParams[0].prevLinkId		= ipcFramesOutVpssId;
++	displayPrm.inQueParams[0].prevLinkQueId		= 0;
++	displayPrm.displayRes						= chainsCfg->displayRes;
++	displayPrm.maxDriverQueLength           	= DISPLAY_LINK_MAX_DRIVER_QUEUE_LENGTH_DEFAULT;
++	displayPrm.displayId                    	= DISPLAY_LINK_DISPLAY_AUTO_SELECT;
++	displayPrm.forceFieldSeparatedInputMode		= FALSE;
++
++	/* Link create */
++	System_linkCreate(captureId,&capturePrm,sizeof(capturePrm));
++	System_linkCreate(ipcFramesOutVpssId, &ipcFramesOutVpssPrm, sizeof(ipcFramesOutVpssPrm));
++	System_linkCreate(ipcFramesInDspId, &ipcFramesInDspPrm, sizeof(ipcFramesInDspPrm));
++	System_linkCreate(helloWorldId, &helloWorldPrm, sizeof(helloWorldPrm));
++	System_linkCreate(displayId,&displayPrm,sizeof(displayPrm));
++
++	/* link start */
++	Vdis_start();
++	System_linkStart(displayId);
++	System_linkStart(ipcFramesOutVpssId);
++	System_linkStart(ipcFramesInDspId);
++	System_linkStart(helloWorldId);
++	Vcap_init(&prm);
++	Vcap_start();
++	System_linkStart(captureId);
++
++	while(1)
++	{
++		char ch;
++		ch = Chains_menuRunTime();
++		if(ch=='0')
++			break;
++	
++		if(ch == '1') 
++		{
++			if(captureId!=SYSTEM_LINK_ID_INVALID)
++			{
++				System_linkControl(captureId,
++						CAPTURE_LINK_CMD_PRINT_ADV_STATISTICS,
++						NULL, 0, TRUE);
++			}
++
++
++			for(i=0; i<OSA_ARRAYSIZE(&displayId); i++)
++			{
++				if(displayId != SYSTEM_LINK_ID_INVALID)
++				{
++					System_linkControl(displayId,
++							DISPLAY_LINK_CMD_PRINT_STATISTICS,
++							NULL, 0, TRUE);
++				}
++			}
++
++
++			OSA_waitMsecs(3000); // allow for print to complete
++
++			UInt32 gChains_enabledProcs[] = {
++				SYSTEM_LINK_ID_M3VPSS,
++				SYSTEM_LINK_ID_M3VIDEO,
++#if defined(TI_816X_BUILD)
++				SYSTEM_LINK_ID_DSP,
++#endif
++			};
++
++			for(i=0; i<sizeof(gChains_enabledProcs)/sizeof(gChains_enabledProcs[0]); i++)
++			{
++				SystemCommon_PrintStatus printStatus;
++
++				memset(&printStatus, 0, sizeof(printStatus));
++
++				printStatus.printCpuLoad = TRUE;
++				printStatus.printTskLoad = TRUE;
++				System_linkControl(
++						gChains_enabledProcs[i],
++						SYSTEM_COMMON_CMD_PRINT_STATUS,
++						&printStatus,
++						sizeof(printStatus),
++						TRUE);
++				System_linkControl(
++						gChains_enabledProcs[i],
++						SYSTEM_COMMON_CMD_CPU_LOAD_CALC_RESET,
++						NULL,
++						0,
++						TRUE);
++
++			}
++		}
++	}
++
++
++
++	/* link stop */
++	Vcap_stop();
++	System_linkStop(captureId);
++	System_linkStop(helloWorldId);
++	System_linkStop(ipcFramesInDspId);
++	System_linkStop(ipcFramesOutVpssId);
++	Vdis_stop();
++	System_linkStop(displayId);
++	
++		
++	/* link delete */	
++	System_linkDelete(captureId);
++	System_linkDelete(ipcFramesOutVpssId);
++	System_linkDelete(ipcFramesInDspId);
++	System_linkDelete(helloWorldId);
++	System_linkDelete(displayId);
++	
++	Chains_displayCtrlDeInit();
++}
+diff --git a/dvr_rdk/demos/link_api_demos/common/chains.h b/dvr_rdk/demos/link_api_demos/common/chains.h
+index 4e3f947..1a36e92 100644
+--- a/dvr_rdk/demos/link_api_demos/common/chains.h
++++ b/dvr_rdk/demos/link_api_demos/common/chains.h
+@@ -170,6 +170,7 @@ Void Chains_RecvFourDecSwMsDis(Chains_Ctrl *chainsCfg);
+ Void Chains_CapEncDecDis(Chains_Ctrl *chainsCfg);
+ Void Chains_SelCapSelRecv(Chains_Ctrl *chainsCfg);
+ Void Chains_singleChCapOsdDis(Chains_Ctrl *chainsCfg);
++Void Chains_CapdspDis(Chains_Ctrl *chainsCfg);
+ 
+ 
+ char Chains_CapSwMsDisMenu();
+diff --git a/dvr_rdk/demos/link_api_demos/common/chains_main.c b/dvr_rdk/demos/link_api_demos/common/chains_main.c
+index 4c26d50..b8866af 100644
+--- a/dvr_rdk/demos/link_api_demos/common/chains_main.c
++++ b/dvr_rdk/demos/link_api_demos/common/chains_main.c
+@@ -313,6 +313,7 @@ char gChains_menuMainCh[] = {
+ 	"\r\n  7: Select Cap + Enc + Dec + Dis                          (VIP:  2x Sii9233a)"
+ 	"\r\n  8: Select Cap + Enc and Select Dec + Dis                 (VIP:  2x Sii9233a)"
+ 	"\r\n  9: Select Cap + OSD + SwMs + Dis                         (VIP:  2x Sii9233a)"
++	"\r\n  10: Select Cap + DSP + Dis                               (VIP:  2x Sii9233a)"
+     "\r\n "
+     "\r\n s: System Settings "
+     "\r\n "
+@@ -590,6 +591,31 @@ Void Chains_menuMainRunCh(int demoId)
+ 			Chains_run(Chains_singleChCapOsdDis);
+ 			break;
+ 
++		case 10:
++			gChains_ctrl.chCapNum = Chains_getIntValue("Number of capture channel encode", 0, 4, 1);
++			gChains_ctrl.chRecNum = Chains_getIntValue("Number of Net channel decode", 0, 2, 1);
++
++			for (i=0; i<gChains_ctrl.chCapNum; i++)
++			{
++				gChains_ctrl.chCfg[i].encFlag		= FALSE;
++				gChains_ctrl.chCfg[i].serverEnable 	= TRUE;
++				gChains_ctrl.chCfg[i].clientEnable 	= FALSE;
++				gChains_ctrl.chCfg[i].protocol     	= TRANSFER_PROTOCOL_NONE;
++			}
++
++			gChains_ctrl.chNum = gChains_ctrl.chCapNum + gChains_ctrl.chRecNum;
++
++			for (i=gChains_ctrl.chCapNum; i < gChains_ctrl.chNum; i++)
++			{
++				gChains_ctrl.chCfg[i].encFlag		= FALSE;
++				gChains_ctrl.chCfg[i].serverEnable 	= FALSE;
++				gChains_ctrl.chCfg[i].clientEnable 	= TRUE;
++				gChains_ctrl.chCfg[i].protocol     	= TRANSFER_PROTOCOL_NONE;
++			}
++
++
++			Chains_run(Chains_CapdspDis);
++			break;
+ 
+ 	}
+ }
+diff --git a/dvr_rdk/mcfw/interfaces/link_api/helloWorldLink.h b/dvr_rdk/mcfw/interfaces/link_api/helloWorldLink.h
+new file mode 100755
+index 0000000..9bca615
+--- /dev/null
++++ b/dvr_rdk/mcfw/interfaces/link_api/helloWorldLink.h
+@@ -0,0 +1,148 @@
++/*******************************************************************************
++ *                                                                             *
++ * Copyright (c) 2009 Texas Instruments Incorporated - http://www.ti.com/      *
++ *                        ALL RIGHTS RESERVED                                  *
++ *                                                                             *
++ ******************************************************************************/
++
++/**
++    \ingroup LINK_API
++    \defgroup HELLOWORLD_LINK_API Scalar 5 Link API
++
++    HELLOWORLD Link can be used to take input from a link and after Scaling output
++    the frames to output queue.
++
++    HELLOWORLD has one output
++    - Output from SC5 scaler
++
++
++    @{
++*/
++
++/**
++    \file sclrLink.h
++    \brief Scaler  (HELLOWORLD) Link API
++*/
++
++#ifndef _HELLOWORLD_LINK_H_
++#ifdef __cplusplus
++extern "C" {
++#endif /* __cplusplus */
++#define _HELLOWORLD_LINK_H_
++
++#include <mcfw/interfaces/link_api/system.h>
++
++#define HELLOWORLD_LINK_MAX_CH  (1)
++#define HELLOWORLD_LINK_MAX_OUT_QUE (1)
++
++/** \HELLOWORLD command to get processed data */
++#define HELLOWORLD_LINK_CMD_GET_PROCESSED_DATA      (0x7000)
++/** \HELLOWORLD command to enable channel */
++#define HELLOWORLD_LINK_CMD_ENABLE_CHANNEL          (0x7001)
++/** \HELLOWORLD command to enable channel */
++#define HELLOWORLD_LINK_CMD_DISABLE_CHANNEL         (0x7002)
++/** \HELLOWORLD command to set Frame Rate */
++#define HELLOWORLD_LINK_CMD_SET_FRAME_RATE          (0x7003)
++/** \HELLOWORLD command to print stats */
++#define HELLOWORLD_LINK_CMD_PRINT_STATISTICS        (0x7004)
++
++#define HELLOWORLD_LINK_NUM_BUFS_PER_CH_DEFAULT (0)
++
++
++/**
++    \brief HelloWorld link create parameters
++*/
++typedef struct
++{
++    /**< System configuration ID. */
++    System_LinkInQueParams      inQueParams;
++    /**< Input queue information. */
++    System_LinkOutQueParams     outQueParams;
++    /**< Output queue information. */
++
++    UInt32 maxWidth;
++    /**< Set the maximum width (in pixels) of video frame that scd will process */
++
++    UInt32 maxHeight;
++    /**< Set the maximum height (in pixels) of video frame that scd will process */
++
++    UInt32 maxStride;
++    /**< Set the maximum video frame pitch/stride of the images in the video buffer*/
++
++    UInt32 maxChannels;
++    /**< Set the maximum number of channels for which the algorithm instance need to be created */
++
++	UInt32                      createOutBuf1;
++
++	UInt32                      numBufsPerCh;
++    /**< Number of output buffers per channel in capture */
++} HelloWorldLink_CreateParams;
++
++/**
++    \brief HELLOWORLD link channel info
++*/
++typedef struct
++{
++	UInt32 channelId;
++	UInt32 enable;
++} HelloWorldLink_ChannelInfo;
++
++/**
++    \brief HELLOWORLD link channel dynamic set config params
++
++    Defines HELLOWORLD FPS parameters that can be changed dynamically
++    on a per channel basis 
++*/
++typedef struct HelloWorldLink_ChFpsParams
++{
++    UInt32 chId;
++    /**< HelloWorld channel number */
++    UInt32 inputFrameRate;
++    /**< input frame rate - 60 or 50 fps if interlaced */
++    UInt32 outputFrameRate;
++    /**< Expected output frame rate */
++} HelloWorldLink_ChFpsParams;
++
++/**
++    \brief HELLOWORLD link register and init
++
++    - Creates link task
++    - Registers as a link with the system API
++
++    \return FVID2_SOK on success
++*/
++Int32 HelloWorldLink_init();
++
++/**
++    \brief HelloWorld link de-register and de-init
++
++    - Deletes link task
++    - De-registers as a link with the system API
++
++    \return FVID2_SOK on success
++*/
++Int32 HelloWorldLink_deInit();
++
++static inline void HelloWorldLink_CreateParams_Init(HelloWorldLink_CreateParams *pPrm)
++{
++    memset(pPrm, 0, sizeof(*pPrm));
++
++    pPrm->inQueParams.prevLinkId = SYSTEM_LINK_ID_INVALID;
++    pPrm->inQueParams.prevLinkQueId = 0;
++
++    pPrm->outQueParams.nextLink = SYSTEM_LINK_ID_INVALID;
++    pPrm->maxWidth  = 360;
++    pPrm->maxHeight = 240;
++	pPrm->maxStride = 360;
++	pPrm->maxChannels = 1;
++    pPrm->numBufsPerCh  = HELLOWORLD_LINK_NUM_BUFS_PER_CH_DEFAULT;
++	pPrm->createOutBuf1 = 0;
++}
++
++#ifdef __cplusplus
++}
++#endif /* __cplusplus */
++#endif
++
++/*@}*/
++
+diff --git a/dvr_rdk/mcfw/interfaces/link_api/system_linkId.h b/dvr_rdk/mcfw/interfaces/link_api/system_linkId.h
+index 60686eb..e1a9e32 100755
+--- a/dvr_rdk/mcfw/interfaces/link_api/system_linkId.h
++++ b/dvr_rdk/mcfw/interfaces/link_api/system_linkId.h
+@@ -85,6 +85,9 @@ extern "C" {
+ #define SYSTEM_LINK_ID_HOST                 HOST_LINK(SYSTEM_LINK_ID_MAX-1)
+ /**< See \ref  HOST_LINK */
+ 
++#define SYSTEM_LINK_ID_HELLOWORLD_0         DSP_LINK(SYSTEM_LINK_COMMON_LINKS_MAX_ID+4)
++/**< See \ref  DSP_LINK */
++
+ /**
+     \brief Common Link Ids. These identifiers are not valid directly.
+ */
+@@ -596,6 +599,11 @@ typedef enum
+ #define SYSTEM_LINK_ID_ALG_COUNT           (SYSTEM_LINK_ID_ALG_END -         \
+                                              SYSTEM_LINK_ID_ALG_START) + 1
+ 
++#define SYSTEM_LINK_ID_HELLOWORLD_START    (SYSTEM_LINK_ID_HELLOWORLD_0)
++#define SYSTEM_LINK_ID_HELLOWORLD_END      (SYSTEM_LINK_ID_HELLOWORLD_0)
++#define SYSTEM_LINK_ID_HELLOWORLD_COUNT    (SYSTEM_LINK_ID_ALG_END -         \
++                                             SYSTEM_LINK_ID_ALG_START) + 1
++
+ /** Host Links */
+ /**
+     \brief Links Ids supported in DSP. These are valid Link Ids available in DSP.
+diff --git a/dvr_rdk/mcfw/src_bios6/Makefile b/dvr_rdk/mcfw/src_bios6/Makefile
+index 8d777ee..6fe4026 100755
+--- a/dvr_rdk/mcfw/src_bios6/Makefile
++++ b/dvr_rdk/mcfw/src_bios6/Makefile
+@@ -6,7 +6,7 @@ INCDIR = .  $(jpegenc_PATH)/Inc $(jpegdec_PATH)/Inc  $(h264enc_PATH)/packages/ti
+ 
+ # List all the external components/interfaces, whose interface header files
+ #  need to be included for this component
+-INCLUDE_EXERNAL_INTERFACES = bios xdc ipc syslink hdvpss dvr_rdk fc xdais h264enc h264dec mpeg4dec mpeg4enc mpeg2dec jpegenc jpegdec swosd edma3lld
++INCLUDE_EXERNAL_INTERFACES = bios xdc ipc syslink hdvpss dvr_rdk fc xdais h264enc h264dec mpeg4dec mpeg4enc mpeg2dec jpegenc jpegdec swosd helloWorld edma3lld
+ 
+ MODULE_SRC_BASE_PATH := $(dvr_rdk_PATH)/mcfw/src_bios6
+ 
+@@ -31,11 +31,13 @@ ifneq ($(PLATFORM), ti810x-evm)
+ SRCDIR = utils/src links_c6xdsp
+ INCDIR  += $(MODULE_SRC_BASE_PATH)/alg/swosd
+ INCDIR  += $(MODULE_SRC_BASE_PATH)/alg/scd
++INCDIR  += $(MODULE_SRC_BASE_PATH)/alg/helloWorld
+ 
+ include $(MODULE_SRC_BASE_PATH)/links_common/SRC_FILES_DSP.MK
+ include $(MODULE_SRC_BASE_PATH)/links_c6xdsp/SRC_FILES.MK
+ 
+ include $(MODULE_SRC_BASE_PATH)/alg/swosd/SRC_FILES.MK
++include $(MODULE_SRC_BASE_PATH)/alg/helloWorldAlg/SRC_FILES.MK
+ 
+ endif
+ 
+diff --git a/dvr_rdk/mcfw/src_bios6/alg/helloWorldAlg/SRC_FILES.MK b/dvr_rdk/mcfw/src_bios6/alg/helloWorldAlg/SRC_FILES.MK
+new file mode 100755
+index 0000000..4813eb1
+--- /dev/null
++++ b/dvr_rdk/mcfw/src_bios6/alg/helloWorldAlg/SRC_FILES.MK
+@@ -0,0 +1,13 @@
++
++SRCDIR += alg/helloWorldAlg/src
++
++SRCS_HELLOWORLD_ALG = helloWorldAlg_TI_ialg.c
++
++#Other algorithm source files
++#SRCS_HELLOWORLD += helloWorldAlg_1.c
++#SRCS_HELLOWORLD += helloWorldAlg_2.c
++
++
++SRCS_c6xdsp +=  $(SRCS_HELLOWORLD_ALG)
++INCDIR += $(SRCDIR) $(SRCDIR)/../
++
+diff --git a/dvr_rdk/mcfw/src_bios6/alg/helloWorldAlg/src/helloWorldAlg.h b/dvr_rdk/mcfw/src_bios6/alg/helloWorldAlg/src/helloWorldAlg.h
+new file mode 100755
+index 0000000..4767bbe
+--- /dev/null
++++ b/dvr_rdk/mcfw/src_bios6/alg/helloWorldAlg/src/helloWorldAlg.h
+@@ -0,0 +1,137 @@
++// ======================================================================== 
++//																		
++//									    
++//  FILE NAME								    
++//	  HELLOWORLDALG.h							    
++//									   
++//									    
++//  DESCRIPTION                                                             
++//	  Public header file for Hello World algorithm
++//
++// ------------------------------------------------------------------------ 
++//         Copyright (c) 2011 Texas Instruments, Incorporated.           
++//                           All Rights Reserved.                           
++// ======================================================================== 
++#ifndef HELLOWORLDALG_H_
++#define HELLOWORLDALG_H_
++
++#include <xdc/std.h>
++#include <ti/xdais/ialg.h>
++
++/////////////////////////////////////////////////////////////////////////////
++//
++// Types Declarations
++//
++/////////////////////////////////////////////////////////////////////////////
++
++typedef char					bool;
++typedef char   					S08;
++typedef unsigned char   		U08;
++typedef signed short    		S16;
++typedef unsigned short  		U16;
++typedef signed int      		S32;
++typedef unsigned int    		U32;
++typedef float           		F32;
++typedef long long				S64;
++typedef unsigned long long		U64;
++typedef void *					PTR;
++
++
++/////////////////////////////////////////////////////////////////////////////
++//
++// PUBLIC HELLOWORLDALG Enumerated Types
++//
++/////////////////////////////////////////////////////////////////////////////
++
++typedef enum
++{
++	HELLOWORLDALG_NO_ERROR = 0,
++	HELLOWORLDALG_ERR_INSTANCE_CREATE_FAILED = 1,
++	HELLOWORLDALG_ERR_INPUT_INVALID = 2,
++	HELLOWORLDALG_ERR_MEMORY_INSUFFICIENT = 3,
++	HELLOWORLDALG_ERR_INPUT_INVALID_FRAME = 4,
++} HELLOWORLDALG_Status;
++
++/////////////////////////////////////////////////////////////////////////////
++//
++// PUBLIC HELLOWORLDALG DEFINED TYPES
++//
++/////////////////////////////////////////////////////////////////////////////
++
++extern IALG_Fxns	HELLOWORLDALG_TI_IALG;
++
++typedef struct
++{
++	S08   helloWorldResult;
++    /**< HELLOWORLDALG result 1  */
++
++    /**< HELLOWORLDALG result 2  */
++
++} HELLOWORLDALG_Result;
++
++
++/**
++    \brief HELLOWORLDALG Channel parameters used to SET BEFORE CALLING PROCESS
++*/
++typedef struct
++{
++    U32 chId;
++    /**< Unique video channel identifier, e.g. channel no. */
++
++	U32 width;
++    /**< Set the width (in pixels) of video frame that HELLOWORLDALG will process */
++
++	U32 height;
++    /**< Set the height (in pixels) of video frame that HELLOWORLDALG will process */
++
++    U32 stride;
++    /**< Set the video frame pitch/stride of the images in the video buffer*/
++
++    PTR curFrame;
++    /** Luma pointer to current frame */
++
++    /** Any Other parameters for your algorithm per channel here */
++
++} HELLOWORLDALG_chPrm;
++
++/**
++    \brief HELLOWORLDALG Algorithm parameters (CREATE)
++*/
++typedef struct
++{
++    U32  maxWidth;
++    /**< Set the maximum width (in pixels) of video frame that HELLOWORLDALG will process */
++    
++    U32  maxHeight;
++    /**< Set the maximum height (in pixels) of video frame that HELLOWORLDALG will process */
++	
++	U32  maxStride;
++    /**< Set the maximum video frame pitch/stride of the images in the video buffer*/
++    
++    U32  maxChannels;
++	/**< Set the maximum number of video channels that HELLOWORLDALG will monitor (Max is 16) */
++
++	/**< Any other create time parameters for your algorithm specific need here */
++
++	HELLOWORLDALG_chPrm	*chDefaultParams;
++	/**< Pointer to array of channel params used to configure HELLOWORLDALG Algorithm. */
++} HELLOWORLDALG_createPrm;
++
++/////////////////////////////////////////////////////////////////////////////
++//
++// PUBLIC HELLOWORLDALG APPLICATION PROGRAMMING INTERFACE (API)
++//
++/////////////////////////////////////////////////////////////////////////////
++
++HELLOWORLDALG_Status 
++HELLOWORLDALG_TI_setPrms(PTR        handle,
++			   HELLOWORLDALG_chPrm *pHELLOWORLDALGChPrm,
++               U32        chanID);
++
++HELLOWORLDALG_Status
++HELLOWORLDALG_TI_process(PTR		   handle, 
++			   U32		   chanID,
++			   HELLOWORLDALG_Result  *pHELLOWORLDALGResult);
++
++
++#endif /* HELLOWORLDALG_H_ */
+diff --git a/dvr_rdk/mcfw/src_bios6/alg/helloWorldAlg/src/helloWorldAlg_TI_ialg.c b/dvr_rdk/mcfw/src_bios6/alg/helloWorldAlg/src/helloWorldAlg_TI_ialg.c
+new file mode 100755
+index 0000000..80ce84e
+--- /dev/null
++++ b/dvr_rdk/mcfw/src_bios6/alg/helloWorldAlg/src/helloWorldAlg_TI_ialg.c
+@@ -0,0 +1,365 @@
++/*
++ * HELLOWORLDALG_TI_ialg.c
++ *
++ *  Created on: Oct 18, 2011
++ *      Author: a0216851
++ */
++
++
++/*
++ *  Copyright 2011
++ *  Texas Instruments Incorporated
++ *
++ *  All rights reserved.  Property of Texas Instruments Incorporated
++ *  Restricted rights to use, duplicate or disclose this code are
++ *  granted through contract.
++ *
++ */
++#include "helloWorldAlg.h"
++#include "helloWorldAlg_TI_priv.h"
++#include "../../mcfw/src_bios6/utils/utils_common.h"
++
++
++/*------------------------------- MACROS ------------------------------------*/
++
++/*---------------------------------------------------------------------------*/
++/* Set MTAB_NRECS to the number of Memtabs required for the algorithm.       */
++/*---------------------------------------------------------------------------*/
++#define MTAB_NRECS              8
++
++#define IALGFXNS  \
++    &HELLOWORLDALG_TI_IALG,   /* module ID */                         \
++    NULL,                     /* activate */                          \
++    HELLOWORLDALG_TI_alloc,   /* alloc */                             \
++    NULL,                     /* control (NULL => no control ops) */  \
++    NULL,                     /* deactivate */                        \
++    HELLOWORLDALG_TI_free, 	  /* free */                              \
++    HELLOWORLDALG_TI_initObj, /* init */                              \
++    NULL,                     /* moved */                             \
++    HELLOWORLDALG_TI_numAlloc /* numAlloc (NULL => IALG_MAXMEMRECS) */
++
++
++IALG_Fxns HELLOWORLDALG_TI_IALG = {      /* module_vendor_interface */
++    IALGFXNS
++};
++
++/* ===================================================================
++*  @func     HELLOWORLDALG_TI_numAlloc
++*
++*  @desc     DSKT2 memory manager queries this algorithm for
++*            number of different memory allocation requirements
++*
++*  @modif    This function modifies the following structures
++*
++*  @inputs   This function takes no inputs
++*
++*  @outputs  <argument name>
++*            Total number of memory table required by this algorithm 
++*
++*  @return   Status of process call
++*  ==================================================================
++*/
++int HELLOWORLDALG_TI_numAlloc(void)
++{
++    return (int)HELLOWORLDALG_MEM_REC_MAX;
++}
++
++/* ===================================================================
++*  @func     HELLOWORLDALG_TI_alloc
++*
++*  @desc     DSKT2 memory manager make this function call to know the
++*            memory allocation details of algorithm
++*
++*  @modif    This function modifies the following structures
++*
++*  @inputs   This function takes the following inputs
++*            <IALG_Params>
++*            Algorithm create time parameters
++*            <IALG_Fxns>
++*            pointer to ialg functions vector table. This is not used
++*            by the module. It is part of ialg protocol
++*           <IALG_MemRec>
++*            Memory table records that algorithm needs to fill
++*
++*  @outputs  <argument name>
++*            Description of usage
++*
++*  @return   Status of process call
++*  ==================================================================
++*/
++int 
++HELLOWORLDALG_TI_alloc(const IALG_Params    *algParams, 
++             IALG_Fxns            **pf, 
++             IALG_MemRec          memTab[])
++{
++    const HELLOWORLDALG_createPrm *params = (HELLOWORLDALG_createPrm *)algParams;
++    U32 bufferSize              = params->maxWidth * params->maxHeight * params->maxChannels;
++    S32	numBuffersRequested     = (int)HELLOWORLDALG_MEM_REC_MAX;
++    S32 bytesPERSISTDARAM0      = 0;
++    S32 bytesPERSISTEXTERNAL    = 0;
++    S32 bytesSCRATCHDARAM0      = 0;
++
++    (void)pf;	// not used; cast removes compiler warning
++
++
++	/*************************************************************************/
++	/* First entry is always the Algorithm object. This is handle to         */
++	/* the algorithm                                                         */
++	/*************************************************************************/	
++    memTab[0].size 		= sizeof(HELLOWORLDALG_TI_Obj);
++    memTab[0].alignment	= 8;
++    memTab[0].space     = IALG_DARAM0;
++    memTab[0].attrs     = IALG_PERSIST;
++	bytesPERSISTDARAM0 += memTab[0].size;
++
++	/*************************************************************************/
++	/* Memory requirement details for internal memory. If you want to share  */
++	/* DSP internal memory with other algorithms, request it as scracth      */
++	/* memory, else you can set the memory attribute as IALG_PERSIST.        */
++	/* 256 KB of L2 memory available on DSP out of which 128 KB set as cache */
++	/* by application and hence 128 KB available as internal heap memory.    */
++	/* Based on your algorithm need you can change the size of cache and heap*/
++	/* If DSKT2 memory manager fails to allocate from internal memory, it    */
++	/* will allocate the memory from external heap.                          */
++	/* Here you can either request for one big chunk of internal memory from */
++	/* DSKT2 memory manager and internally divide the memory pool among      */
++	/* various buffers of algorithm or you can have many entries in memTab   */
++	/* table for internal memory requirements of individual buffers          */
++	/*************************************************************************/	
++    memTab[HELLOWORLDALG_MEM_REC_INTERNAL].size 		= 
++		HELLOWORLDALG_MEM_BYTES_INTERNAL;  
++    memTab[HELLOWORLDALG_MEM_REC_INTERNAL].alignment	= 8;
++    memTab[HELLOWORLDALG_MEM_REC_INTERNAL].space 		= IALG_DARAM0;
++    memTab[HELLOWORLDALG_MEM_REC_INTERNAL].attrs 		= IALG_SCRATCH;
++    bytesSCRATCHDARAM0                     += 
++		memTab[HELLOWORLDALG_MEM_REC_INTERNAL].size;
++
++	/*************************************************************************/	
++	/* Request for memory from external memory pool. Again, based on algorith*/
++	/* need you can request for scratch or persistent memory type here.      */
++	/*************************************************************************/	
++    memTab[HELLOWORLDALG_MEM_REC_EXTERNAL].size 	   = (bufferSize >> 5) * sizeof(int);
++    memTab[HELLOWORLDALG_MEM_REC_EXTERNAL].alignment   = 128;
++    memTab[HELLOWORLDALG_MEM_REC_EXTERNAL].space 	   = IALG_EXTERNAL;
++    memTab[HELLOWORLDALG_MEM_REC_EXTERNAL].attrs 	   = IALG_PERSIST;
++    bytesPERSISTEXTERNAL                   += memTab[HELLOWORLDALG_MEM_REC_EXTERNAL].size;
++
++	/*************************************************************************/	
++	/* Memory request from internal heap for algorithm static structure.     */
++	/*************************************************************************/	
++    memTab[HELLOWORLDALG_MEM_REC_HELLOWORLDALGPRM].size 		= sizeof(HELLOWORLDALG_Params);
++    memTab[HELLOWORLDALG_MEM_REC_HELLOWORLDALGPRM].alignment	= 8;
++    memTab[HELLOWORLDALG_MEM_REC_HELLOWORLDALGPRM].space 		= IALG_DARAM0;
++    memTab[HELLOWORLDALG_MEM_REC_HELLOWORLDALGPRM].attrs 		= IALG_PERSIST;
++	bytesPERSISTDARAM0                     += memTab[HELLOWORLDALG_MEM_REC_HELLOWORLDALGPRM].size;
++	
++	/*************************************************************************/	
++	/* Request for further memory here by incrementing the memtab index      */ 
++	/*************************************************************************/	
++     Vps_printf("\n\n> HELLOWORLDALG: Algorithm memory requirements queried ::");
++    Vps_printf("\n>      Number of buffers = %d ", numBuffersRequested);
++    Vps_printf("\n>      Persistent Internal Memory   = %d bytes", bytesPERSISTDARAM0);
++    Vps_printf("\n>      Persistent External Memory   = %d bytes", bytesPERSISTEXTERNAL);
++    Vps_printf("\n>      Scratch Internal Memory      = %d bytes", bytesSCRATCHDARAM0);
++
++    return numBuffersRequested;
++}
++
++
++/* ===================================================================
++*  @func     HELLOWORLDALG_TI_free
++*
++*  @desc     DSKT2 memory manager make this function call to free the
++*            memory allocated to the algorithm
++*
++*  @modif    This function modifies the following structures
++*
++*  @inputs   This function takes the following inputs
++*            <IALG_Params>
++*            Algorithm create time parameters
++*           <IALG_MemRec>
++*            Memory table records that algorithm needs to fill
++*
++*  @outputs  <argument name>
++*            Description of usage
++*
++*  @return   Status of process call
++*  ==================================================================
++*/
++
++int HELLOWORLDALG_TI_free(IALG_Handle handle, IALG_MemRec memTab[])
++{
++    (void)handle;	// not used; cast removes compiler warning
++    return (HELLOWORLDALG_TI_alloc(NULL, NULL, memTab));
++}
++
++
++/* ===================================================================
++*  @func     HELLOWORLDALG_TI_initObj
++*
++*  @desc     Once DSKT2 memory manager has allocated memory, it makes 
++*            this function call. Here algorithm get pointers to those 
++*            memory and initializes it's state buffer.
++*
++*  @modif    This function modifies the following structures
++*
++*  @inputs   This function takes the following inputs
++*            <IALG_Handle>
++*            Handle to the algoirthm 
++*           <IALG_MemRec>
++*            Memory table records with allocated buffer pointers
++*            <IALG_Handle>
++*            Not used by algorithm. This is to maintain IALG interface
++*            protocol. 
++*            <IALG_Params>
++*            Algorithm create time parameters
++*
++*  @outputs  <argument name>
++*            Description of usage
++*
++*  @return   Status of process call
++*  ==================================================================
++*/
++
++int HELLOWORLDALG_TI_initObj(IALG_Handle 			handle,
++                   const IALG_MemRec 	memTab[],
++                   IALG_Handle 			p,
++                   const IALG_Params 	*algParams)
++{
++    const HELLOWORLDALG_createPrm *params	= (HELLOWORLDALG_createPrm *)algParams;
++    HELLOWORLDALG_TI_Obj			*obj	= (HELLOWORLDALG_TI_Obj *)handle;
++    HELLOWORLDALG_Params			*helloWorldAlg	= NULL;
++
++    HELLOWORLDALG_Status status;
++    U08 i;
++
++    (void)p;	// not used; cast removes compiler warning
++    Vps_printf("\n> HELLOWORLDALG: Initializing Hello World Algorithm... ");
++
++    if(memTab[HELLOWORLDALG_MEM_REC_HELLOWORLDALGPRM].base != NULL)
++    {
++        obj->helloWorldAlg = memTab[HELLOWORLDALG_MEM_REC_HELLOWORLDALGPRM].base;
++        helloWorldAlg = (HELLOWORLDALG_Params *)obj->helloWorldAlg;
++    }
++    else
++    {
++        Vps_printf("\n> HELLOWORLDALG: Application memory allocation ==> FAILED FOR memTab #%d!!!!\n", HELLOWORLDALG_MEM_REC_HELLOWORLDALGPRM);
++        return (HELLOWORLDALG_ERR_MEMORY_INSUFFICIENT);
++    }
++
++    // Pass memory allocation addresses for the memory tables
++    for (i = 0; i < HELLOWORLDALG_MEM_REC_MAX; i++)
++    {
++        if (memTab[i].base == NULL)
++        {
++            status = HELLOWORLDALG_ERR_MEMORY_INSUFFICIENT;
++            Vps_printf("\n> HELLOWORLDALG: Application memory allocation ==> FAILED FOR memTab #%d!!!!\n", i);
++
++            return status;
++        }
++
++		/*********************************************************************/
++        /* Initialize Hello World algorithm buffer pointers here             */
++		/*********************************************************************/
++		/* 		       
++        helloWorldAlg->buf[i]		 = memTab[i].base;
++        */
++
++		Vps_printf("\n> HELLOWORLDALG: Application memory allocation ==> memTab #%d", i);
++		Vps_printf("\n       Bytes    = %d",   memTab[i].size);
++		Vps_printf("\n       Address  = 0x%x", memTab[i].base);
++		if (memTab[i].space == IALG_EXTERNAL)
++			Vps_printf("\n       Location = EXTERNAL DDR MEM");
++		else
++			Vps_printf("\n       Location = INTERNAL L1/2 MEM");
++    }
++
++    /*********************************************************************/
++    /* Initialize HELLOWORLDALG Instance here based on various create    */
++    /* time parameter (HELLOWORLDALG_createPrm) set by the user          */
++    /*********************************************************************/
++	helloWorldAlg->maxWidth  = (S16)params->maxWidth;
++	helloWorldAlg->maxHeight = (S16)params->maxHeight;
++	helloWorldAlg->maxStride = (S16)params->maxStride;
++
++    return (HELLOWORLDALG_NO_ERROR);
++}
++
++
++/* ===================================================================
++*  @func     HELLOWORLDALG_TI_process
++*
++*  @desc     Hellow world algorithm Process call to process upon the 
++*            buffers received at DSP side
++*
++*  @modif    This function modifies the following structures
++*
++*  @inputs   This function takes the following inputs
++*            <IALG_Handle>
++*            Handle to the algoirthm 
++*            <U32 chanID>
++*            Input Channel id that algorithm need to process
++*            <HELLOWORLDALG_Result *pHelloWorldResult>
++*            Pointer to output buffer that processed algorithm 
++*            can write the results
++*
++*  @outputs  <argument name>
++*            Description of usage
++*
++*  @return   Status of process call
++*  ==================================================================
++*/
++
++HELLOWORLDALG_Status
++HELLOWORLDALG_TI_process(PTR        handle, 
++						 U32        chanID,
++                         HELLOWORLDALG_Result *pHelloWorldResult)
++{
++	HELLOWORLDALG_Status	status = HELLOWORLDALG_NO_ERROR;
++//	HELLOWORLDALG_Params	* helloWorldAlg = (HELLOWORLDALG_Params  *)((HELLOWORLDALG_TI_Obj *)handle)->helloWorldAlg;
++
++//	status = HELLOWORLDALG_process(helloWorldAlg, pHelloWorldResult);
++    Vps_printf("HELLO WORLD ALG: Process frame\n");
++
++	return status;
++}
++
++
++/* ===================================================================
++*  @func     HELLOWORLDALG_TI_setPrms
++*
++*  @desc     Once DSKT2 memory manager has allocated memory, it makes 
++*            this function call. Here algorithm get pointers to those 
++*            memory and initializes it's state buffer.
++*
++*  @modif    This function modifies the following structures
++*
++*  @inputs   This function takes the following inputs
++*            <IALG_Handle>
++*            Handle to the algoirthm 
++*           <IALG_MemRec>
++*            Memory table records with allocated buffer pointers
++*            <IALG_Handle>
++*            Not used by algorithm. This is to maintain IALG interface
++*            protocol. 
++*            <IALG_Params>
++*            Algorithm create time parameters
++*
++*  @outputs  <argument name>
++*            Description of usage
++*
++*  @return   Status of process call
++*  ==================================================================
++*/
++
++HELLOWORLDALG_Status 
++HELLOWORLDALG_TI_setPrms(PTR         	handle,
++               HELLOWORLDALG_chPrm   *helloWorldAlgPrm,
++               U32        chanID)
++{
++//	HELLOWORLDALG_Params	* helloWorldAlg = (HELLOWORLDALG_Params  *)((HELLOWORLDALG_TI_Obj *)handle)->helloWorldAlg;
++
++    /* All run time dynamic params settings here */
++
++    return HELLOWORLDALG_NO_ERROR;
++}
+diff --git a/dvr_rdk/mcfw/src_bios6/alg/helloWorldAlg/src/helloWorldAlg_TI_priv.h b/dvr_rdk/mcfw/src_bios6/alg/helloWorldAlg/src/helloWorldAlg_TI_priv.h
+new file mode 100755
+index 0000000..7d04359
+--- /dev/null
++++ b/dvr_rdk/mcfw/src_bios6/alg/helloWorldAlg/src/helloWorldAlg_TI_priv.h
+@@ -0,0 +1,56 @@
++/*
++* HELLOWORLDALG_TI_priv.h
++*/
++
++#ifndef HELLOWORLDALG_TI_PRIV_H_
++#define HELLOWORLDALG_TI_PRIV_H_
++
++
++#include <xdc/std.h>
++#include <ti/xdais/xdas.h>
++#include <ti/sdo/fc/dskt2/dskt2.h>
++
++#define HELLOWORLDALG_TI_VERSIONSTRING "0.00.10.00"
++
++#define HELLOWORLDALG_MEM_REC_INTERNAL             1
++#define HELLOWORLDALG_MEM_REC_EXTERNAL             2
++#define HELLOWORLDALG_MEM_REC_HELLOWORLDALGPRM     3
++#define HELLOWORLDALG_MEM_REC_MAX          \
++	             (HELLOWORLDALG_MEM_REC_HELLOWORLDALGPRM + 1)
++
++#define HELLOWORLDALG_MEM_BYTES_INTERNAL   (100*1024)
++#define HELLOWORLDALG_MEM_BYTES_EXTERNAL   (1*1024*1024)
++
++
++/* DSP Algorith specific parameters here */
++typedef struct
++{
++	S16	maxWidth;
++    S16 maxHeight;		
++	S16	maxStride;	
++	S08	otherPrm1;	
++	S08	otherPrm2;	
++} HELLOWORLDALG_Params;
++
++
++// Data structure
++typedef struct HELLOWORLDALG_TI_Obj {
++    IALG_Obj    				alg;            /* MUST be first field of all XDAIS algs */
++    void            			*helloWorldAlg; /* Pointer to the private static structure of hello world alg */
++} HELLOWORLDALG_TI_Obj;
++
++// externs
++
++
++// functions
++
++int HELLOWORLDALG_TI_numAlloc(void);
++int HELLOWORLDALG_TI_alloc(const IALG_Params *algParams, IALG_Fxns **pf, IALG_MemRec memTab[]);
++int HELLOWORLDALG_TI_free(IALG_Handle handle, IALG_MemRec memTab[]);
++int HELLOWORLDALG_TI_initObj(IALG_Handle handle, const IALG_MemRec memTab[], IALG_Handle parent, const IALG_Params *algParams);
++
++#endif /* HELLOWORLDALG_TI_PRIV_H_ */
++
++/*
++*  @(#) ti.xdais.dm.examples.vidanalytics_copy; 1, 0, 0,16; 11-25-2007 20:45:08; /db/wtree/library/trees/dais-i23x/src/
++*/
+diff --git a/dvr_rdk/mcfw/src_bios6/cfg/ti816x/config_1G_128MLinux.bld b/dvr_rdk/mcfw/src_bios6/cfg/ti816x/config_1G_128MLinux.bld
+index 816bcd5..a20a3da 100755
+--- a/dvr_rdk/mcfw/src_bios6/cfg/ti816x/config_1G_128MLinux.bld
++++ b/dvr_rdk/mcfw/src_bios6/cfg/ti816x/config_1G_128MLinux.bld
+@@ -148,7 +148,7 @@ var TOTAL_MEM_SIZE             = 1024*MB;
+ 
+ /* first 512MB */
+ LINUX_SIZE                 = 128*MB;
+-SR1_SIZE                   = 329*MB;
++SR1_SIZE                   = 319*MB;
+ SR3_INTRADUCATI_IPC_SIZE   =          124*KB;
+ VIDEO_M3_CODE_SIZE         =  3*MB;
+ VIDEO_M3_BSS_SIZE          = 11*MB  + 512*KB;
+@@ -157,7 +157,7 @@ DSS_M3_CODE_SIZE           =  1*MB  + 512*KB;
+ DSS_M3_BSS_SIZE            = 16*MB  + 132*KB;
+ DSS_M3_DATA_SIZE           =  5*MB  + 512*KB;
+ DSP_CODE_SIZE              =  1*MB;
+-DSP_DATA_SIZE              = 14*MB  + 256*KB;
++DSP_DATA_SIZE              = 24*MB  + 256*KB;
+ 
+ 
+ /* second 512MB */
+diff --git a/dvr_rdk/mcfw/src_bios6/cfg/ti816x/config_1G_256MLinux.bld b/dvr_rdk/mcfw/src_bios6/cfg/ti816x/config_1G_256MLinux.bld
+index bb3356b..70e9169 100755
+--- a/dvr_rdk/mcfw/src_bios6/cfg/ti816x/config_1G_256MLinux.bld
++++ b/dvr_rdk/mcfw/src_bios6/cfg/ti816x/config_1G_256MLinux.bld
+@@ -148,7 +148,7 @@ var TOTAL_MEM_SIZE             = 1024*MB;
+ 
+ /* first 512MB */
+ LINUX_SIZE                 = 256*MB;
+-SR1_SIZE                   = 201*MB;
++SR1_SIZE                   = 191*MB;
+ SR3_INTRADUCATI_IPC_SIZE   =          124*KB;
+ VIDEO_M3_CODE_SIZE         =  3*MB;
+ VIDEO_M3_BSS_SIZE          = 11*MB  + 512*KB;
+@@ -157,7 +157,7 @@ DSS_M3_CODE_SIZE           =  1*MB  + 512*KB;
+ DSS_M3_BSS_SIZE            = 16*MB  + 512*KB;
+ DSS_M3_DATA_SIZE           =  5*MB  + 512*KB;
+ DSP_CODE_SIZE              =  900*KB - 40*KB;
+-DSP_DATA_SIZE              = 14*MB + 40*KB;
++DSP_DATA_SIZE              = 24*MB + 40*KB;
+ 
+ 
+ /* second 512MB */
+diff --git a/dvr_rdk/mcfw/src_bios6/links_c6xdsp/SRC_FILES.MK b/dvr_rdk/mcfw/src_bios6/links_c6xdsp/SRC_FILES.MK
+index f503005..c4f842a 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_c6xdsp/SRC_FILES.MK
++++ b/dvr_rdk/mcfw/src_bios6/links_c6xdsp/SRC_FILES.MK
+@@ -1,6 +1,7 @@
+ 
+ SRCDIR += links_c6xdsp/system links_c6xdsp/utils/src \
+-		links_c6xdsp/alg_link links_c6xdsp/alg_link/swosd links_c6xdsp/alg_link/scd
++		links_c6xdsp/alg_link links_c6xdsp/alg_link/swosd \
++		links_c6xdsp/alg_link/scd links_c6xdsp/helloWorld
+ 
+ SRCS_UTILS = utils_dsp.c
+ 
+@@ -10,8 +11,10 @@ SRCS_OSDLINK    = osdLink_alg.c
+ 
+ SRCS_SCDLINK    = scdLink_alg.c scdLink_processTsk.c
+ 
++SRCS_HELLOWORLD = helloWorldLink_tsk.c helloWorldLink_priv.c
++
+ SRCS_SYSTEMDSP  = system_c6xdsp.c systemLink_tsk_c6xdsp.c 
+ 
+-SRCS_c6xdsp += $(SRCS_SYSTEMDSP) $(SRCS_UTILS) $(SRCS_ALGLINK) $(SRCS_OSDLINK) $(SRCS_SCDLINK)
++SRCS_c6xdsp += $(SRCS_SYSTEMDSP) $(SRCS_UTILS) $(SRCS_ALGLINK) $(SRCS_OSDLINK) $(SRCS_SCDLINK) $(SRCS_HELLOWORLD)
+ 
+ 
+diff --git a/dvr_rdk/mcfw/src_bios6/links_c6xdsp/helloWorld/helloWorldLink_priv.c b/dvr_rdk/mcfw/src_bios6/links_c6xdsp/helloWorld/helloWorldLink_priv.c
+new file mode 100755
+index 0000000..9d417f3
+--- /dev/null
++++ b/dvr_rdk/mcfw/src_bios6/links_c6xdsp/helloWorld/helloWorldLink_priv.c
+@@ -0,0 +1,590 @@
++/*******************************************************************************
++*                                                                             *
++* Copyright (c) 2009 Texas Instruments Incorporated - http://www.ti.com/      *
++*                        ALL RIGHTS RESERVED                                  *
++*                                                                             *
++******************************************************************************/
++
++#include "helloWorldLink_priv.h"
++#include "helloWorldAlg.h"
++#include "ti/sdo/fc/dskt2/dskt2.h"
++#include <mcfw/src_bios6/utils/utils_mem.h>
++
++static UInt8 gScratchId = 1;
++
++/* ===================================================================
++*  @func     HelloWorldLink_algDelete
++*
++*  @desc     Function creates the instance of hellow world algorithm
++*
++*  @modif    This function modifies the following structures
++*
++*  @inputs   This function takes the following inputs
++*            HelloWorldLink_Obj
++*            Object to hello world link
++*
++*  @outputs  
++*            
++*
++*  @return   Status
++*			  FVID2_SOK: If outout object created successfuly 
++*  ==================================================================
++*/
++
++Int32 HelloWorldLink_algDelete(HelloWorldLink_Obj * pObj)
++{
++    Int32 scratchId = gScratchId;
++
++    Vps_printf(" %d: HELLOWORLD    : Algorithm Delete in progress !!!\n",
++               Utils_getCurTimeInMsec());
++
++    if(pObj->algHndl == NULL)
++        return FVID2_EFAIL;
++
++    /* Deactivate algorithm */
++    DSKT2_deactivateAlg(scratchId, (IALG_Handle)pObj->algHndl);
++
++    DSKT2_freeAlg(scratchId, (IALG_Handle)pObj->algHndl);
++
++    Vps_printf(" %d: HELLOWORLD    : Algorithm Delete Done !!!\n",
++               Utils_getCurTimeInMsec());
++
++	return FVID2_SOK;
++}
++
++/* ===================================================================
++*  @func     HelloWorldLink_algCreate
++*
++*  @desc     Function creates the instance of hellow world algorithm
++*
++*  @modif    This function modifies the following structures
++*
++*  @inputs   This function takes the following inputs
++*            HelloWorldLink_Obj
++*            Object to hello world link
++*
++*  @outputs  
++*            
++*
++*  @return   Status
++*			  FVID2_SOK: If outout object created successfuly 
++*  ==================================================================
++*/
++
++static Int32 HelloWorldLink_algCreate(HelloWorldLink_Obj * pObj)
++{
++    HELLOWORLDALG_createPrm       algCreatePrm;
++    IALG_Fxns           *algFxns = (IALG_Fxns *)&HELLOWORLDALG_TI_IALG;
++
++    Vps_printf(" %d: HELLOWORLD    : Algorithm Create in progress !!!\n",
++               Utils_getCurTimeInMsec());
++
++    algCreatePrm.maxWidth    = pObj->createArgs.maxWidth;
++    algCreatePrm.maxHeight   = pObj->createArgs.maxHeight;
++    algCreatePrm.maxStride   = pObj->createArgs.maxStride;
++    algCreatePrm.maxChannels = pObj->createArgs.maxChannels;
++    /*************************************************************************/
++	/* Create algorithm instance and get hello world algo handle.            */
++    /* DSKT2 is memory manager and creates instance for algorithm that has   */
++	/* XDAIS/Alg interface APIs implemented (numAlloc, memAlloc and algInit) */
++    /*************************************************************************/
++
++    pObj->algHndl = DSKT2_createAlg((Int)gScratchId,
++            (IALG_Fxns *)algFxns, NULL,(IALG_Params *)&algCreatePrm);
++
++    if(pObj->algHndl == NULL)
++    {
++        Vps_printf(" %d: HELLOWORLD    : Algorithm Create ERROR !!!\n",
++               Utils_getCurTimeInMsec());
++        return FVID2_EFAIL;
++    }
++
++
++	/*************************************************************************/
++    /* Once algorithm instace is created, initialize channel specific        */
++    /* parameters here                                                       */
++    /*************************************************************************/
++	
++    /* for(chNum = 0; chNum < algCreatePrm.maxChannels; chNum++)
++	{
++	    HELLOWORLDALG_TI_setPrms(pObj->algHndl, HELLOWORLDALG_chPrm, chNum)
++	} */
++	
++
++    Vps_printf(" %d: HELLOWORLD    : Algorithm Create Done !!!\n",
++               Utils_getCurTimeInMsec());
++
++ return FVID2_SOK;
++}
++
++
++
++/* ===================================================================
++*  @func     HelloWorldLink_createOutObj
++*
++*  @desc     Function creates the queue for output buffer and allocate
++*            the buffers. These buffers can be send as input to next
++*            links (running on any core)
++*
++*  @modif    This function modifies the following structures
++*
++*  @inputs   This function takes the following inputs
++*            HelloWorldLink_Obj
++*            Object to hello world link
++*
++*  @outputs  
++*            
++*
++*  @return   Status
++*			  FVID2_SOK: If outout object created successfuly 
++*  ==================================================================
++*/
++
++static Int32 HelloWorldLink_createOutObj(HelloWorldLink_Obj * pObj)
++{
++    HelloWorldLink_OutObj *pOutObj;
++    System_LinkChInfo *pOutChInfo;
++    Int32 status;
++    UInt32 bufIdx;
++    Int i,j,queueId,chId;
++    UInt32 totalBufCnt;
++
++    /*************************************************************************/
++    /* One link can have multiple output queues with different/same output   */
++    /* data queued to it's output queue. Create here outobj for all output   */
++    /* queue                                                                 */
++    /*************************************************************************/
++    for(queueId = 0; queueId < HELLOWORLD_LINK_MAX_OUT_QUE; queueId++)
++    {
++
++        pOutObj = &pObj->outObj[queueId];    
++
++        pObj->outObj[queueId].numAllocPools = 1;
++
++        pOutObj->bufSize[0] = HELLOWORLD_LINK_OUT_BUF_SIZE;
++
++        /*********************************************************************/
++        /* Set the buffer alignment as per need. Typically 128 suggested for */
++        /* better cache and DMA efficiency.                                  */
++        /*********************************************************************/
++        pOutObj->bufSize[0] = VpsUtils_align(pOutObj->bufSize[0], 
++            HELLOWORLD_BUFFER_ALIGNMENT);
++
++        /*********************************************************************/
++        /* Create output queue                                               */
++        /*********************************************************************/
++        status = Utils_bitbufCreate(&pOutObj->bufOutQue, TRUE, FALSE,
++            pObj->outObj[queueId].numAllocPools);
++        UTILS_assert(status == FVID2_SOK);
++
++        totalBufCnt = 0;
++
++        /*********************************************************************/
++        /* Allocate output buffers                                           */
++        /*********************************************************************/
++        for (i = 0; i < pOutObj->numAllocPools; i++)
++        {
++            /*****************************************************************/		
++            /* Number of output buffers per channel. In this example hello   */
++            /* world, outNumBufs set via user input.                         */
++            /*****************************************************************/
++            pOutObj->outNumBufs[i] = (pObj->createArgs.maxChannels * 
++                pObj->createArgs.numBufsPerCh);
++
++            for (j = 0; j < pObj->createArgs.maxChannels; j++)
++            {
++                pOutObj->ch2poolMap[j] =  i;
++            }
++
++            /*****************************************************************/		
++            /* Allocate the buffer from shared memory pool for bitstream     */
++            /* buffer. If you like to allocate memory for frame buffers,     */
++            /* you can either call Utils_tilerFrameAlloc() to allocate       */
++            /* memory from tiler memory or you can call Utils_memFrameAlloc  */
++            /* to allocate memory from shared buffer pool                    */
++            /*****************************************************************/			
++            status = Utils_memBitBufAlloc(&(pOutObj->outBufs[totalBufCnt]),
++                pOutObj->bufSize[i],
++                pOutObj->outNumBufs[i]);
++            UTILS_assert(status == FVID2_SOK);
++
++            /*****************************************************************/		
++            /* Push the buffers to the output queue that's just been created */
++            /*****************************************************************/			
++            for (bufIdx = 0; bufIdx < pOutObj->outNumBufs[i]; bufIdx++)
++            {
++                UTILS_assert((bufIdx + totalBufCnt) < HELLOWORLD_LINK_MAX_OUT_FRAMES);
++                pOutObj->outBufs[bufIdx + totalBufCnt].allocPoolID = i;
++                pOutObj->outBufs[bufIdx + totalBufCnt].doNotDisplay =
++                    FALSE;
++                status =
++                    Utils_bitbufPutEmptyBuf(&pOutObj->bufOutQue,
++                    &pOutObj->outBufs[bufIdx +
++                    totalBufCnt]);
++                UTILS_assert(status == FVID2_SOK);
++            }
++            totalBufCnt += pOutObj->outNumBufs[i];
++        }
++    }
++
++    pObj->info.numQue = HELLOWORLD_LINK_MAX_OUT_QUE;
++
++    /*************************************************************************/
++    /* queInfo is used by next link to create it's instance.                 */
++    /* Set numCh - number of channel information                             */
++    /*************************************************************************/
++    for (queueId = 0u; queueId < HELLOWORLD_LINK_MAX_OUT_QUE; queueId++)
++    {
++        pObj->info.queInfo[queueId].numCh = pObj->inQueInfo.numCh;
++    }
++
++    /*************************************************************************/
++    /* Set the information for output buffer of each channel. Again, next    */
++    /* link  connected to hello world link will use this information to     */
++    /* create it's own instance.                                             */
++    /*************************************************************************/
++    for (chId = 0u; chId < pObj->inQueInfo.numCh; chId++)
++    {
++        for (queueId = 0u; queueId < HELLOWORLD_LINK_MAX_OUT_QUE; queueId++)
++        {
++            pOutChInfo = &pObj->info.queInfo[queueId].chInfo[chId];
++            pOutChInfo->bufType = SYSTEM_BUF_TYPE_VIDBITSTREAM;
++            pOutChInfo->codingformat = NULL;
++            pOutChInfo->memType = NULL;
++            pOutChInfo->scanFormat = pObj->inQueInfo.chInfo[chId].scanFormat;
++            pOutChInfo->width = pObj->inQueInfo.chInfo[chId].width;
++            pOutChInfo->height = pObj->inQueInfo.chInfo[chId].height;
++        }
++    }
++
++    return (status);
++}
++
++
++/* ===================================================================
++*  @func     HelloWorldLink_algCreate
++*
++*  @desc     Creates HelloWorld link instance
++*
++*  @modif    This function modifies the following structures
++*
++*  @inputs   This function takes the following inputs
++*            <HelloWorldLink_Obj>
++*            Object to hello world link
++*            <HelloWorldLink_CreateParams>
++*            Create time parameters passed by the user
++*
++*  @outputs  <argument name>
++*            Description of usage
++*
++*  @return   Status of instance creation
++*  ==================================================================
++*/
++Int32 HelloWorldLink_create(HelloWorldLink_Obj * pObj, 
++                            HelloWorldLink_CreateParams * pPrm)
++{
++    Int32 status;
++
++    Vps_printf(" %d: HELLOWORLD : Create in progress !!!\n", 
++        Utils_getCurTimeInMsec());
++
++    /*************************************************************************/
++    /* copy the create time parameters passed from host to local object      */
++    /*************************************************************************/
++    memcpy(&pObj->createArgs, pPrm, sizeof(*pPrm));
++
++    /*************************************************************************/
++    /* Get frame header information from previous link input queue            */
++    /*************************************************************************/
++    status = System_linkGetInfo(pPrm->inQueParams.prevLinkId, &pObj->inTskInfo);
++    UTILS_assert(status == FVID2_SOK);
++
++    /*************************************************************************/
++    /* Make sure queid information provided in create params is less then    */
++    /* total number of queues in previous link (returned by                  */
++    /* System_linkGetInfo module                                             */
++    /*************************************************************************/
++    UTILS_assert(pPrm->inQueParams.prevLinkQueId < pObj->inTskInfo.numQue);
++
++    /*************************************************************************/
++    /* Make a local copy of previous link queue number connected to          */
++    /* helloWorld link                                                       */
++    /*************************************************************************/
++    memcpy(&pObj->inQueInfo,
++        &pObj->inTskInfo.queInfo[pPrm->inQueParams.prevLinkQueId],
++        sizeof(pObj->inQueInfo));
++
++    /*************************************************************************/
++    /* Check if helloWorld link instance can handle the number of channels   */
++    /* from previous links                                                   */
++    /*************************************************************************/
++    UTILS_assert(pObj->inQueInfo.numCh <= HELLOWORLD_LINK_MAX_CH);
++
++
++    /*************************************************************************/
++    /* Create an instance to hello world algorithm                           */
++    /*************************************************************************/
++    status = HelloWorldLink_algCreate(pObj);
++    UTILS_assert(status == FVID2_SOK);
++
++    /*************************************************************************/
++    /* If you have more algorithms that sequentially process upon the        */
++    /* received input frame, you can create instances to those algorithms    */
++    /* in series here                                                        */
++    /*************************************************************************/
++    //xxxLink_Create();
++    //yyyLink_Create(); 
++
++
++    /*************************************************************************/
++    /* All links creates and manages the output buffers they produce. Input  */
++    /* buffers managed by prior link that produced that buffer               */
++    /* This is generic link and hence user input taken from A8 if link needs */
++    /* to produce and hence create an output buffer.                         */
++    /*************************************************************************/
++    if (pObj->createArgs.createOutBuf1)
++        HelloWorldLink_createOutObj(pObj);
++
++    Vps_printf(" %d: HELLOWORLD : Create Done !!!\n", Utils_getCurTimeInMsec());
++    return FVID2_SOK;
++}
++
++
++/* ===================================================================
++*  @func     HelloWorldLink_algDelete
++*
++*  @desc     Delete HelloWorld link instance
++*
++*  @modif    This function modifies the following structures
++*
++*  @inputs   This function takes the following inputs
++*            <HelloWorldLink_Obj>
++*            Object to hello world link
++*
++*  @outputs  <argument name>
++*            Description of usage
++*
++*  @return   Status of instance creation
++*  ==================================================================
++*/
++Int32 HelloWorldLink_delete(HelloWorldLink_Obj * pObj)
++{    
++    Int32 status;
++    Int32 i,outId,bitbuf_index;
++    HelloWorldLink_OutObj *pOutObj;
++
++    Vps_printf(" %d: HELLOWORLD : Delete in progress !!!\n", 
++        Utils_getCurTimeInMsec());
++
++    /*************************************************************************/
++    /* Make a call to your algrithm instance deletion here. At this place    */
++    /* you should free memory and DMA resource (if any) held by your algo    */
++    /*************************************************************************/
++    //status = HelloWorldLink_algDelete(&pObj->Alg1);
++    //UTILS_assert(status == FVID2_SOK);
++
++    /*************************************************************************/
++    /* Free the output buffer and it's queue created by helloWorld link      */
++    /*************************************************************************/
++    for (outId = 0; outId < HELLOWORLD_LINK_MAX_OUT_QUE; outId++)
++    {
++        {
++            pOutObj = &pObj->outObj[outId];
++
++            status = Utils_bitbufDelete(&pOutObj->bufOutQue);
++            UTILS_assert(status == FVID2_SOK);
++            bitbuf_index = 0;
++
++            for (i = 0; i < pOutObj->numAllocPools; i++)
++            {
++                UTILS_assert((pOutObj->outBufs[bitbuf_index].bufSize ==
++                    pOutObj->bufSize[i]));
++                status = Utils_memBitBufFree(&pOutObj->outBufs[bitbuf_index],
++                    pOutObj->outNumBufs[i]);
++                UTILS_assert(status == FVID2_SOK);
++                bitbuf_index += pOutObj->outNumBufs[i];
++            }
++        }
++    }
++
++    Vps_printf(" %d: HELLOWORLD : Delete Done !!!\n", Utils_getCurTimeInMsec());
++
++    return FVID2_SOK;
++}
++
++/* ===================================================================
++*  @func     HelloWorldLink_algProcessData
++*
++*  @desc     Process upon the input frame received from previous link
++*            At this place, make a call to algorithm process call
++*
++*  @modif    This function modifies the following structures
++*
++*  @inputs   This function takes the following inputs
++*            <HelloWorldLink_Obj>
++*            Object to hello world link
++*
++*  @outputs  <argument name>
++*            Description of usage
++*
++*  @return   Status of process call
++*  ==================================================================
++*/
++Int32 HelloWorldLink_processData(HelloWorldLink_Obj * pObj)
++{
++    UInt32 frameId;
++    System_LinkInQueParams *pInQueParams;
++    FVID2_Frame *pFrame;
++    FVID2_FrameList frameList;
++    Bitstream_Buf *pOutBuf;
++    Utils_BitBufHndl *bufOutQue;
++    Int32 status;
++    System_FrameInfo *pInFrameInfo;
++    Bitstream_BufList outBitBufList;
++	HELLOWORLDALG_Result *pHelloWorldResult = NULL;
++
++    status = FVID2_EFAIL;
++    pInQueParams = &pObj->createArgs.inQueParams;
++
++    bufOutQue = &pObj->outObj[0].bufOutQue;
++
++    /*************************************************************************/
++    /* Get input frames from previous link output queue                      */
++    /*************************************************************************/
++    System_getLinksFullFrames(pInQueParams->prevLinkId,
++        pInQueParams->prevLinkQueId, &frameList);
++
++    /*************************************************************************/
++    /* If input frame received from queue, get the output buffer from out    */
++    /* queue and process the frame                                           */
++    /*************************************************************************/
++    if (frameList.numFrames)
++    {
++
++        //pObj->totalFrameCount += frameList.numFrames;
++
++        /*********************************************************************/
++        /* Get the outout buffer for each input buffer and process the frame */
++        /*                                                                   */
++        /*********************************************************************/
++        for(frameId=0; frameId< frameList.numFrames; frameId++)
++        {
++            Bool doFrameDrop = FALSE;
++
++			pFrame = frameList.frames[frameId];
++
++            //pChObj = &pObj->chObj[chIdx];
++
++            //pChObj->inFrameRecvCount++;
++
++
++            /*********************************************************************/
++            /* If current frame needs to be processed, get the output buffer     */
++            /* from output queue                                                 */
++            /*********************************************************************/
++            if(pObj->createArgs.createOutBuf1)
++            {
++                pOutBuf = NULL;
++                status = Utils_bitbufGetEmptyBuf(bufOutQue,
++                    &pOutBuf,
++                    0, //pObj->outObj.ch2poolMap[chIdx], /*Need to change later.*/
++                    BIOS_NO_WAIT);
++
++                if(!((status == FVID2_SOK) && (pOutBuf)))
++                {
++                    doFrameDrop = TRUE;
++                }
++
++                /*********************************************************************/
++                /* Captured YUV buffers time stamp is passed by all links to next    */
++                /* buffers bu copying the input buffer times stamp to it's output    */
++                /* buffer. This is used for benchmarking system latency.             */
++                /*********************************************************************/
++                pInFrameInfo = (System_FrameInfo *) pFrame->appData;
++                pOutBuf->lowerTimeStamp = (UInt32)(pInFrameInfo->ts64 & 0xFFFFFFFF);
++                pOutBuf->upperTimeStamp = (UInt32)(pInFrameInfo->ts64 >> 32);
++                pOutBuf->channelNum = pFrame->channelNum;
++                //pOutBuf->fillLength = ;
++                //pOutBuf->frameWidth = ;
++                //pOutBuf->frameHeight = ;
++
++				pHelloWorldResult = (HELLOWORLDALG_Result *) pOutBuf->addr;
++            }
++
++            /*********************************************************************/
++            /* Now input and output buffers available and this frame need not be */
++            /* skipped, make a call to the algorithm process call and process the*/
++            /* frame.                                                            */
++            /*********************************************************************/
++            if(doFrameDrop == FALSE)
++            {
++                /*********************************************************************/
++                /* Pointer to Luma buffer for processing.                            */
++                /*********************************************************************/
++                //pObj->chParams[chIdx].curFrame = pFrame->addr[0][0];
++
++                pInFrameInfo = (System_FrameInfo *) pFrame->appData;
++
++                //curTime = Utils_getCurTimeInMsec();
++		char* y;
++		char* p;
++		p = pFrame->addr[0][0];
++		int i;
++		for(i=0;i<=1920*540;i++)
++		{
++			y = p + i*2;
++			*y = 0x80;
++		}
++                /*********************************************************************/
++                /* Make a call to algorithm process call here                        */
++                /*********************************************************************/
++                HELLOWORLDALG_TI_process(pObj->algHndl, 0, pHelloWorldResult);//HelloWorldLink_algProcess();
++
++                /*********************************************************************/
++                /* Benchmark frame process time                                      */
++                /*********************************************************************/
++                //pChObj->inFrameProcessTime += (Utils_getCurTimeInMsec() - curTime);
++
++                //pChObj->inFrameProcessCount++;
++                outBitBufList.bufs[outBitBufList.numBufs] = pOutBuf;
++                outBitBufList.numBufs++;
++
++            }
++            else
++            {
++                //pChObj->inFrameUserSkipCount++;
++            }
++        }
++    }
++
++    /*********************************************************************/
++    /* Release the input buffer to previous link queue                   */
++    /*********************************************************************/
++    System_putLinksEmptyFrames(pInQueParams->prevLinkId,
++        pInQueParams->prevLinkQueId, &frameList);
++
++    /*********************************************************************/
++    /* If output buffers available, push them to the output queue        */
++    /*********************************************************************/
++    if(pObj->createArgs.createOutBuf1)
++    {
++        if (outBitBufList.numBufs)
++        {
++            status = Utils_bitbufPutFull(bufOutQue,
++                &outBitBufList);
++            UTILS_assert(status == FVID2_SOK);
++
++            /*********************************************************************/
++            /* Inform next link of output buffer availability                    */
++            /*********************************************************************/
++            System_sendLinkCmd(pObj->createArgs.outQueParams.nextLink,
++                SYSTEM_CMD_NEW_DATA);
++            status = FVID2_SOK;        
++        }
++        else
++        {
++            status = FVID2_EFAIL; 
++        } 
++    }
++    return status;
++}
+diff --git a/dvr_rdk/mcfw/src_bios6/links_c6xdsp/helloWorld/helloWorldLink_priv.h b/dvr_rdk/mcfw/src_bios6/links_c6xdsp/helloWorld/helloWorldLink_priv.h
+new file mode 100755
+index 0000000..ec6ee27
+--- /dev/null
++++ b/dvr_rdk/mcfw/src_bios6/links_c6xdsp/helloWorld/helloWorldLink_priv.h
+@@ -0,0 +1,64 @@
++/*******************************************************************************
++ *                                                                             *
++ * Copyright (c) 2009 Texas Instruments Incorporated - http://www.ti.com/      *
++ *                        ALL RIGHTS RESERVED                                  *
++ *                                                                             *
++ ******************************************************************************/
++
++#ifndef _HELLOWORLD_LINK_PRIV_H_
++#define _HELLOWORLD_LINK_PRIV_H_
++
++#include <mcfw/src_bios6/utils/utils.h>
++#include <mcfw/src_bios6/links_c6xdsp/system/system_priv_c6xdsp.h>
++#include <mcfw/interfaces/link_api/helloWorldLink.h>
++
++#define HELLOWORLD_LINK_OBJ_MAX  (SYSTEM_LINK_ID_HELLOWORLD_COUNT)
++
++#define HELLOWORLD_LINK_MAX_OUT_FRAMES_PER_CH       (SYSTEM_LINK_FRAMES_PER_CH)
++
++#define HELLOWORLD_LINK_MAX_OUT_FRAMES             (HELLOWORLD_LINK_OBJ_MAX * \
++	                                          HELLOWORLD_LINK_MAX_OUT_FRAMES_PER_CH)
++
++#define HELLOWORLD_LINK_OUT_BUF_SIZE         100
++#define HELLOWORLD_BUFFER_ALIGNMENT          128
++
++typedef struct HelloWorldLink_OutObj {
++    Utils_BitBufHndl bufOutQue;
++    UInt32           numAllocPools;
++    Bitstream_Buf    outBufs[HELLOWORLD_LINK_MAX_OUT_FRAMES];
++    UInt32           outNumBufs[UTILS_BITBUF_MAX_ALLOC_POOLS];
++    UInt32           bufSize[UTILS_BITBUF_MAX_ALLOC_POOLS];
++    UInt32           ch2poolMap[HELLOWORLD_LINK_MAX_CH];
++} HelloWorldLink_OutObj;
++
++typedef struct HelloWorldLink_Obj {
++    UInt32 linkId;
++    
++    char name[32];
++    
++    Utils_TskHndl tsk;
++    System_LinkInfo inTskInfo;
++    System_LinkQueInfo inQueInfo;
++
++    HelloWorldLink_CreateParams createArgs;
++
++    System_LinkInfo info;
++
++    HelloWorldLink_OutObj outObj[HELLOWORLD_LINK_MAX_OUT_QUE];
++    
++	/* Algorithm object */
++    void *algHndl;
++} HelloWorldLink_Obj;
++
++
++Int32 HelloWorldLink_create(HelloWorldLink_Obj * pObj, HelloWorldLink_CreateParams * pPrm);
++Int32 HelloWorldLink_processData(HelloWorldLink_Obj * pObj);
++Int32 HelloWorldLink_delete(HelloWorldLink_Obj * pObj);
++Int32 HelloWorldLink_getFullBufs(Utils_TskHndl * pTsk, UInt16 queId,
++                           Bitstream_BufList * pBufList);
++Int32 HelloWorldLink_putEmptyBufs(Utils_TskHndl * pTsk, UInt16 queId,
++                           Bitstream_BufList * pBufList);
++Int32 HelloWorldLink_getInfo(Utils_TskHndl * pTsk, System_LinkInfo * info);
++
++#endif
++
+diff --git a/dvr_rdk/mcfw/src_bios6/links_c6xdsp/helloWorld/helloWorldLink_tsk.c b/dvr_rdk/mcfw/src_bios6/links_c6xdsp/helloWorld/helloWorldLink_tsk.c
+new file mode 100755
+index 0000000..51ecbc7
+--- /dev/null
++++ b/dvr_rdk/mcfw/src_bios6/links_c6xdsp/helloWorld/helloWorldLink_tsk.c
+@@ -0,0 +1,291 @@
++/*******************************************************************************
++ *                                                                             *
++ * Copyright (c) 2009 Texas Instruments Incorporated - http://www.ti.com/      *
++ *                        ALL RIGHTS RESERVED                                  *
++ *                                                                             *
++ ******************************************************************************/
++
++#include "helloWorldLink_priv.h"
++
++#pragma DATA_ALIGN(gHelloWorldLink_tskStack, 32)
++#pragma DATA_SECTION(gHelloWorldLink_tskStack, ".bss:taskStackSection")
++UInt8 gHelloWorldLink_tskStack[HELLOWORLD_LINK_OBJ_MAX][HELLOWORLD_LINK_TSK_STACK_SIZE];
++
++HelloWorldLink_Obj gHelloWorldLink_obj[HELLOWORLD_LINK_OBJ_MAX];
++
++
++/* ===================================================================
++ *  @func     HelloWorldLink_tskMain
++ *
++ *  @desc     Each link run as independent thread. This is main task
++ *            that recevies the command from host/other core and 
++ *            act upon them 
++ *
++ *  @modif    This function modifies the following structures
++ *
++ *  @inputs   This function takes the following inputs
++ *            <Utils_TskHndl>
++ *            Handle to the task 
++ *            <Utils_MsgHndl>
++ *            Handle to the message
++ *
++ *  @outputs  
++ *
++ *  @return   None
++ *  ==================================================================
++ */
++Void HelloWorldLink_tskMain(struct Utils_TskHndl *pTsk, Utils_MsgHndl * pMsg)
++{
++    UInt32 cmd = Utils_msgGetCmd(pMsg);
++    Bool ackMsg, done;
++    Int32 status;
++    HelloWorldLink_Obj *pObj;
++
++    pObj = (HelloWorldLink_Obj *) pTsk->appData;
++
++    if (cmd != SYSTEM_CMD_CREATE)
++    {
++        Utils_tskAckOrFreeMsg(pMsg, FVID2_EFAIL);
++        return;
++    }
++
++	/* Create algorithm isntance. At this place allocate memory resource and DMA resource, if any */
++    status = HelloWorldLink_create(pObj, Utils_msgGetPrm(pMsg));
++
++    Utils_tskAckOrFreeMsg(pMsg, status);
++
++    if (status != FVID2_SOK)
++        return;
++
++    done = FALSE;
++    ackMsg = FALSE;
++
++    while (!done)
++    {
++        status = Utils_tskRecvMsg(pTsk, &pMsg, BIOS_WAIT_FOREVER);
++        if (status != FVID2_SOK)
++            break;
++
++        cmd = Utils_msgGetCmd(pMsg);
++
++        switch (cmd)
++        {
++            case SYSTEM_CMD_NEW_DATA:
++                  Utils_tskAckOrFreeMsg(pMsg, status);
++                  HelloWorldLink_processData(pObj);
++                  break;
++
++            case HELLOWORLD_LINK_CMD_PRINT_STATISTICS:
++               // HelloWorldLink_printStatistics(&pObj->scdAlg, TRUE);
++                Utils_tskAckOrFreeMsg(pMsg, status);
++                break;
++
++            case SYSTEM_CMD_DELETE:
++                done = TRUE;
++                ackMsg = TRUE;
++                break;
++
++            /*
++			case SYSTEM_CMD_CONFIG_X_PRM
++			//Algorithm call to configure/tune run time parameter X
++			break;
++			*/
++
++            default:
++                Utils_tskAckOrFreeMsg(pMsg, status);
++                break;
++        }
++    }
++
++    HelloWorldLink_delete(pObj);
++
++    if (ackMsg && pMsg != NULL)
++        Utils_tskAckOrFreeMsg(pMsg, status);
++
++    return;
++}
++
++/* ===================================================================
++ *  @func     HelloWorldLink_init
++ *
++ *  @desc     This module creates the HelloWorld link instance
++ *
++ *  @modif    This function modifies the following structures
++ *
++ *  @inputs   This function takes no inputs
++ *            
++ *  @outputs  
++ *            
++ *
++ *  @return   Status
++ *			  FVID2_SOK: If HelloWorld link instance created successfuly 
++ *  ====================================================================
++ */
++Int32 HelloWorldLink_init()
++{
++    Int32 status;
++    System_LinkObj linkObj;
++    HelloWorldLink_Obj *pObj;
++    UInt32 objId;
++
++    for (objId = 0; objId < HELLOWORLD_LINK_OBJ_MAX; objId++)
++    {
++        pObj = &gHelloWorldLink_obj[objId];
++
++        memset(pObj, 0, sizeof(*pObj));
++
++        pObj->linkId = SYSTEM_LINK_ID_HELLOWORLD_0 + objId;
++
++        linkObj.pTsk = &pObj->tsk;
++        linkObj.linkGetFullFrames   = NULL;
++        linkObj.linkPutEmptyFrames  = NULL;
++        linkObj.linkGetFullBitBufs  = HelloWorldLink_getFullBufs;
++        linkObj.linkPutEmptyBitBufs = HelloWorldLink_putEmptyBufs;
++        linkObj.getLinkInfo         = HelloWorldLink_getInfo;
++
++        sprintf(pObj->name, "HELLOWORLD%d   ", objId);
++
++        System_registerLink(pObj->linkId, &linkObj);
++
++        status = Utils_tskCreate(&pObj->tsk,
++                                 HelloWorldLink_tskMain,
++                                 HELLOWORLD_LINK_TSK_PRI,
++                                 gHelloWorldLink_tskStack[objId],
++                                 HELLOWORLD_LINK_TSK_STACK_SIZE, pObj, pObj->name);
++        UTILS_assert(status == FVID2_SOK);
++    }
++
++    return status;
++}
++
++/* ===================================================================
++ *  @func     HelloWorldLink_deInit
++ *
++ *  @desc     This module deletes the HelloWorld link instance
++ *
++ *  @modif    This function modifies the following structures
++ *
++ *  @inputs   This function takes no inputs
++ *            
++ *  @outputs  
++ *            
++ *
++ *  @return   Status
++ *			  FVID2_SOK: If instance deletion is successfull
++ *  ==================================================================
++ */
++Int32 HelloWorldLink_deInit()
++{
++    UInt32 objId;
++    HelloWorldLink_Obj *pObj;
++
++    for (objId = 0; objId < HELLOWORLD_LINK_OBJ_MAX; objId++)
++    {
++        pObj = &gHelloWorldLink_obj[objId];
++
++        Utils_tskDelete(&pObj->tsk);
++    }
++
++    return FVID2_SOK;
++}
++
++/* ===================================================================
++ *  @func     HelloWorldLink_getInfo
++ *
++ *  @desc     This module is call by next link (that HelloWorld link is 
++ *            connected to) to get the output buffer of helloWorld link.
++ *            This is input buffer to next link
++ *
++ *  @modif    This function modifies the following structures
++ *
++*  @inputs   <Utils_TskHndl>
++ *            handle to the task 
++ *            <UInt16>
++ *            Id of the queue from which this buffer needs to be received
++ *            <Bitstream_BufList>
++ *            List of buffers received
++ *            
++ *  @outputs  
++ *            
++ *
++ *  @return   Status
++ *			  FVID2_SOK: If buffers were pushed to the out queue 
++ *                       successfuly 
++ *  ====================================================================
++ */
++Int32 HelloWorldLink_getInfo(Utils_TskHndl * pTsk, System_LinkInfo * info)
++{
++    HelloWorldLink_Obj *pObj = (HelloWorldLink_Obj *) pTsk->appData;
++
++    memcpy(info, &pObj->info, sizeof(*info));
++
++    return FVID2_SOK;
++}
++
++/* ===================================================================
++ *  @func     HelloWorldLink_getFullBufs
++ *
++ *  @desc     This module is call by next link (that HelloWorld link is 
++ *            connected to) to get the output buffer of helloWorld link.
++ *            This is input buffer to next link
++ *
++ *  @modif    This function modifies the following structures
++ *
++*  @inputs   <Utils_TskHndl>
++ *            handle to the task 
++ *            <UInt16>
++ *            Id of the queue from which this buffer needs to be received
++ *            <Bitstream_BufList>
++ *            List of buffers received
++ *            
++ *  @outputs  
++ *            
++ *
++ *  @return   Status
++ *			  FVID2_SOK: If buffers were pushed to the out queue 
++ *                       successfuly 
++ *  ====================================================================
++ */
++Int32 HelloWorldLink_getFullBufs(Utils_TskHndl * pTsk, UInt16 queId,
++                           Bitstream_BufList * pBufList)
++{
++    HelloWorldLink_Obj *pObj = (HelloWorldLink_Obj *) pTsk->appData;
++
++    UTILS_assert(queId < HELLOWORLD_LINK_MAX_OUT_QUE);
++
++    return Utils_bitbufGetFull(&pObj->outObj[queId].bufOutQue, pBufList, BIOS_NO_WAIT);
++}
++
++
++/* ===================================================================
++ *  @func     HelloWorldLink_putEmptyBufs
++ *
++ *  @desc     This module is call by next link (that HelloWorld link is 
++ *            connected to) free the output buffer of helloWorld link 
++ *            that it received via it's input queue 
++ *
++ *  @modif    This function modifies the following structures
++ *
++ *  @inputs   <Utils_TskHndl>
++ *            handle to the task 
++ *            <UInt16>
++ *            Id of the queue to which this buffer needs to be released
++ *            <Bitstream_BufList>
++ *            List of buffers to be freed
++ *  @outputs  
++ *            
++ *
++ *  @return   Status
++ *			  FVID2_SOK: If buffers were pushed to the out queue 
++ *                       successfuly 
++ *  ====================================================================
++ */
++Int32 HelloWorldLink_putEmptyBufs(Utils_TskHndl * pTsk, UInt16 queId,
++                           Bitstream_BufList * pBufList)
++{
++    HelloWorldLink_Obj *pObj = (HelloWorldLink_Obj *) pTsk->appData;
++
++    UTILS_assert(queId < HELLOWORLD_LINK_MAX_OUT_QUE);
++
++    return Utils_bitbufPutEmpty(&pObj->outObj[queId].bufOutQue, pBufList);
++}
+diff --git a/dvr_rdk/mcfw/src_bios6/links_c6xdsp/system/system_c6xdsp.c b/dvr_rdk/mcfw/src_bios6/links_c6xdsp/system/system_c6xdsp.c
+index 0604140..850927e 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_c6xdsp/system/system_c6xdsp.c
++++ b/dvr_rdk/mcfw/src_bios6/links_c6xdsp/system/system_c6xdsp.c
+@@ -10,6 +10,7 @@
+ #include <mcfw/interfaces/link_api/algLink.h>
+ #include <mcfw/interfaces/link_api/ipcLink.h>
+ #include <mcfw/src_bios6/links_c6xdsp/utils/utils_dsp.h>
++#include <mcfw/interfaces/link_api/helloWorldLink.h>
+ #ifdef  DSP_RPE_AUDIO_ENABLE
+ #include "ti/rpe.h"
+ #endif
+@@ -96,6 +97,7 @@ Void System_initLinks()
+     System_memPrintHeapStatus();
+ 
+     AlgLink_init();
++	HelloWorldLink_init();
+     NullLink_init();
+     MergeLink_init();
+     SelectLink_init();
+@@ -112,6 +114,7 @@ Void System_deInitLinks()
+     SelectLink_deInit();
+     MergeLink_deInit();
+     NullLink_deInit();
++	HelloWorldLink_deInit();
+     AlgLink_deInit();
+ 
+     Vps_printf(" %d: SYSTEM  : De-Initializing Links ... DONE !!! \r\n",
+diff --git a/dvr_rdk/mcfw/src_bios6/links_common/system/system_priv_common.h b/dvr_rdk/mcfw/src_bios6/links_common/system/system_priv_common.h
+index 4313734..aee6abb 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_common/system/system_priv_common.h
++++ b/dvr_rdk/mcfw/src_bios6/links_common/system/system_priv_common.h
+@@ -62,6 +62,7 @@
+ #define DEI_LINK_TSK_PRI                 (8)
+ #define SW_MS_LINK_TSK_PRI               (8)
+ #define ALG_LINK_TSK_PRI                 (9)
++#define HELLOWORLD_LINK_TSK_PRI          (2)
+ #define SELECT_LINK_TSK_PRI              (8)
+ #define SCALAR_LINK_TSK_PRI              (6)
+ #define DISPLAY_LINK_TSK_PRI             (4)
+@@ -109,6 +110,7 @@
+ #define DEC_LINK_TSK_STACK_SIZE          (SYSTEM_DEFAULT_TSK_STACK_SIZE)
+ #define ENC_LINK_TSK_STACK_SIZE          (SYSTEM_DEFAULT_TSK_STACK_SIZE)
+ #define ALG_LINK_TSK_STACK_SIZE          (SYSTEM_DEFAULT_TSK_STACK_SIZE)
++#define HELLOWORLD_LINK_TSK_STACK_SIZE   (SYSTEM_DEFAULT_TSK_STACK_SIZE)
+ #define VPSS_ALG_LINK_TSK_STACK_SIZE     (SYSTEM_DEFAULT_TSK_STACK_SIZE)
+ #define SYSTEM_MSGQ_TSK_STACK_SIZE       (SYSTEM_DEFAULT_TSK_STACK_SIZE)
+ #define AVSYNC_LINK_TSK_STACK_SIZE       (SYSTEM_DEFAULT_TSK_STACK_SIZE)
+diff --git a/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vsys_priv.h b/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vsys_priv.h
+index 194f54d..e667b80 100755
+--- a/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vsys_priv.h
++++ b/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vsys_priv.h
+@@ -27,6 +27,7 @@
+ #include <mcfw/interfaces/link_api/sclrLink.h>
+ #include <mcfw/interfaces/link_api/avsync.h>
+ #include <mcfw/interfaces/link_api/mpSclrLink.h>
++#include <mcfw/interfaces/link_api/helloWorldLink.h>
+ 
+ #include <ti/syslink/utils/IHeap.h>
+ #include <ti/syslink/utils/Memory.h>
+-- 
+2.7.4
+
