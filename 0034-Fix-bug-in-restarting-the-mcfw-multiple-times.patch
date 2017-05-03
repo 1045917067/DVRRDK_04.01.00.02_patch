@@ -1,0 +1,26 @@
+From 2cd35c775f40da8d025f5d205527847891f260fc Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Sat, 25 Jun 2016 08:48:54 +0800
+Subject: [PATCH 34/42] Fix bug in restarting the mcfw multiple times
+
+Delete the thread in exiting the thread handler function
+---
+ dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis_hdmi_ctrl_priv.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis_hdmi_ctrl_priv.c b/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis_hdmi_ctrl_priv.c
+index 25000ed..649b8f1 100755
+--- a/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis_hdmi_ctrl_priv.c
++++ b/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis_hdmi_ctrl_priv.c
+@@ -215,6 +215,8 @@ Int32 Vdis_hdmiCtrl_deInit(void)
+         gCtrlInst.exitCtrlthread = EXIT_CONTROL_THREAD;
+     }
+ 
++	OSA_thrDelete(&gCtrlInst.ctrlThread);
++
+     return 0;
+ }
+ 
+-- 
+2.7.4
+
