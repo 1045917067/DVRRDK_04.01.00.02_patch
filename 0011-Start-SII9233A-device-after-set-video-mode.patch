@@ -1,0 +1,35 @@
+From 61788c4dcc25ec4776df38caf49332b710f1df65 Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Fri, 10 Jun 2016 17:57:38 +0800
+Subject: [PATCH 11/42] Start SII9233A device after set video mode.
+
+---
+ dvr_rdk/mcfw/src_linux/devices/sii9233a/src/sii9233a_i2c.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/dvr_rdk/mcfw/src_linux/devices/sii9233a/src/sii9233a_i2c.c b/dvr_rdk/mcfw/src_linux/devices/sii9233a/src/sii9233a_i2c.c
+index a89f436..a529e3c 100755
+--- a/dvr_rdk/mcfw/src_linux/devices/sii9233a/src/sii9233a_i2c.c
++++ b/dvr_rdk/mcfw/src_linux/devices/sii9233a/src/sii9233a_i2c.c
+@@ -941,6 +941,18 @@ Int32 Device_sii9233aSetVideoMode(Device_Sii9233aObj *pObj,
+     if ( status < 0 )
+         return status;
+ 
++    /*
++     *  Modified by: zzx.
++     *
++     *  Date       : Jan 13, 2014.
++     *
++     *  Description:
++     *
++     *               Start SII9233A device.
++     *
++     */
++    status = Device_sii9233aStart(pObj);
++
+     return status;
+ }
+ 
+-- 
+2.7.4
+
