@@ -1,0 +1,560 @@
+From 5d48eea2037b4b795af999a1cbaaeda078b990f8 Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Thu, 23 Jun 2016 18:43:34 +0800
+Subject: [PATCH 32/42] Implement rotation using tiler in SwMs link
+
+Add SWMS cmd to rotate the image.
+Possible only when input is tiled.
+---
+ .../demos/mcfw_api_demos/mcfw_demo/demo_display.c  |  13 +++
+ dvr_rdk/mcfw/interfaces/link_api/swMsLink.h        |  40 ++++++++
+ dvr_rdk/mcfw/interfaces/ti_vdis.h                  |  18 ++++
+ .../src_bios6/links_m3vpss/swMs/swMsLink_drv.c     |  98 +++++++++++++++++-
+ .../src_bios6/links_m3vpss/swMs/swMsLink_priv.h    |   3 +
+ .../src_bios6/links_m3vpss/swMs/swMsLink_tsk.c     |   6 ++
+ dvr_rdk/mcfw/src_bios6/utils/src/utils_tiler.c     | 113 ++++++++++++++++++++-
+ dvr_rdk/mcfw/src_bios6/utils/utils_tiler.h         |  16 +++
+ dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis.c          |  27 +++++
+ 9 files changed, 326 insertions(+), 8 deletions(-)
+
+diff --git a/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/demo_display.c b/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/demo_display.c
+index 3115823..f9a97aa 100755
+--- a/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/demo_display.c
++++ b/dvr_rdk/demos/mcfw_api_demos/mcfw_demo/demo_display.c
+@@ -39,6 +39,7 @@ char gDemo_displaySettingsMenu[] = {
+     "\r\n u: Change CPROC setting"
+ #endif
+     "\r\n t: Get Video Time Stamp Info"
++    "\r\n v: Rotate Video (ONLY when input to SwMs is tiled)"
+     "\r\n"
+     "\r\n p: Previous Menu"
+     "\r\n"
+@@ -1850,6 +1851,18 @@ int Demo_displaySettings(int demoId)
+                 cprocCfg = Demo_getIntValue("CPROC color temperature", 0, 17, 0);
+                 Vdis_setCprocConfig(cprocCfg);
+                 break;
++            case 'v':
++            {
++                UInt32 flipX,flipY,swapXY;
++
++                devId = VDIS_DEV_HDMI;
++                chId = Demo_getChId("DISPLAY", gDemo_info.maxVdisChannels);
++                flipX = Demo_getIntValue("SWMS Rotate : FlipX (0 - FALSE/1 - TRUE)",0,1,0);
++                flipY = Demo_getIntValue("SWMS Rotate : FlipY (0 - FALSE/1 - TRUE)",0,1,0);
++                swapXY = Demo_getIntValue("SWMS Rotate : SwapX-Y (0 - FALSE/1 - TRUE)",0,1,0);
++                Vdis_setRotateConfig(devId, chId, flipX,flipY,swapXY);
++                break;
++            }
+ #endif
+             }
+     }
+diff --git a/dvr_rdk/mcfw/interfaces/link_api/swMsLink.h b/dvr_rdk/mcfw/interfaces/link_api/swMsLink.h
+index ba01df2..1ebd09d 100755
+--- a/dvr_rdk/mcfw/interfaces/link_api/swMsLink.h
++++ b/dvr_rdk/mcfw/interfaces/link_api/swMsLink.h
+@@ -199,6 +199,21 @@
+ */
+ #define SYSTEM_SW_MS_LINK_CMD_SET_WIN_PARAM             (0x800C)
+ 
++/*
++ *  Modified by: zzx.
++ *
++ *  Date       : Jun 23, 2016.
++ *
++ *  Description:
++ *
++ *               Add cmd to rotate the image when input is tiled dynamically.
++ */
++/**
++    \brief SWMS cmd to rotate the image.Possible only when input is tiled.
++    \param  SwMsLink_ChRotateParams * [IN] Channel rotate parameters.
++*/
++#define SYSTEM_SW_MS_LINK_CMD_IMAGE_ROTATE_CMD     (0x800D)
++
+ /* @} */
+ 
+ /**
+@@ -503,6 +518,31 @@ typedef struct SwMsLink_ChTimeParams
+     /**< PTS is valid only if this flag is 1 */
+ 
+ } SwMsLink_ChTimeParams;
++
++
++/**
++    \brief SwMs Link channel rotate params
++
++    Defines SwMs channel image rotate parameters that can be changed dynamically
++    on a per channel basis
++    Rotation is done via tiler and is applicable only when input for the specified
++    channel is in tiled format.
++*/
++typedef struct SwMsLink_ChRotateParams
++{
++    UInt32 chId;
++    /**< SwMs channel number */
++
++    UInt32 flipX;
++    /**< Flag indicating if X coordinate should be flipped (Vertical mirror) */
++
++    UInt32 flipY;
++    /**< Flag indicating if Y coordinate should be flipped (Horizontal mirror)  */
++
++    UInt32 swapXY;
++    /**< Flag indicating if X and Y coordinate should be swapped  */
++} SwMsLink_ChRotateParams;
++
+ /**
+ *   \brief SWMS link register and init
+ 
+diff --git a/dvr_rdk/mcfw/interfaces/ti_vdis.h b/dvr_rdk/mcfw/interfaces/ti_vdis.h
+index c0f130f..69b5aa8 100755
+--- a/dvr_rdk/mcfw/interfaces/ti_vdis.h
++++ b/dvr_rdk/mcfw/interfaces/ti_vdis.h
+@@ -1282,6 +1282,24 @@ Int32 Vdis_setEdeStrength(int edeStrength);
+  */
+ Int32 Vdis_setCprocConfig(int cprocConfig);
+ 
++/**
++ * \brief:
++ *      Function to configure video frame rotation using tiler
++ * \input:
++ *      vdDevId             -- Display id
++ *      chId                -- channel Id
++ *      flipX               -- Flip image on X-direction (TRUE/FALSE)
++ *      flipY               -- Flip image on Y-direction (TRUE/FALSE)
++ *      swapXY              -- Swap X,Y cordiates (TRUE/FALSE)
++ *
++ * \output:
++ *      NA
++ * \return
++*       TI_MEDIA_SUCCESS    --  while success
++*       ERROR_CODE          --  refer for err defination
++*/
++Int32 Vdis_setRotateConfig(VDIS_DEV vdDevId, UInt32 chId,UInt32 flipX,UInt32 flipY,UInt32 swapXY);
++
+ #ifdef __cplusplus
+ }
+ #endif /* __cplusplus */
+diff --git a/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_drv.c b/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_drv.c
+index 3089bf9..0d9efcf 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_drv.c
++++ b/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_drv.c
+@@ -1049,6 +1049,16 @@ Int32 SwMsLink_drvModifyFramePointer(SwMsLink_Obj * pObj, SwMsLink_DrvObj *pDrvO
+             offset[1] = rtChannelInfo->pitch[1]*rtChannelInfo->startY/2  +
+                                        rtChannelInfo->startX*bytesPerPixel;
+ 
++            if ((rtChannelInfo->memType == VPS_VPDMA_MT_TILEDMEM)
++                &&
++                (UTILS_TILER_ORI_XY_SWAP & pObj->chObj[pObj->layoutParams.winInfo[windId].channelNum].rotateMask))
++            {
++                offset[0] = (UTILS_TILER_CNT_8BIT_PITCH_XY_SWAP*rtChannelInfo->startX)    +
++                                           rtChannelInfo->startY*bytesPerPixel;
++                offset[1] = (UTILS_TILER_CNT_16BIT_PITCH_XY_SWAP*rtChannelInfo->startX)/2  +
++                                           rtChannelInfo->startY*bytesPerPixel;
++            }
++
+             if(addOffset == FALSE)
+             {
+                 offset[0] = -offset[0];
+@@ -1077,6 +1087,27 @@ Int32 SwMsLink_drvModifyFramePointer(SwMsLink_Obj * pObj, SwMsLink_DrvObj *pDrvO
+                       (Ptr) ((Int32)pDrvObj->inFrameList.frames[frameId]->addr[0][0] + offset[0]);
+                    pDrvObj->inFrameList.frames[frameId]->addr[0][1] =
+                         (Ptr) ((Int32)pDrvObj->inFrameList.frames[frameId]->addr[0][1] + offset[1]);
++                   if ((rtChannelInfo->memType == VPS_VPDMA_MT_TILEDMEM)
++                       &&
++                       (pObj->chObj[pObj->layoutParams.winInfo[windId].channelNum].rotateMask != UTILS_TILER_ORI_NONE))
++                   {
++                       if (addOffset)
++                       {
++                           UInt32 rotateMask = pObj->chObj[pObj->layoutParams.winInfo[windId].channelNum].rotateMask;
++
++                           pDrvObj->inFrameList.frames[frameId]->addr[0][0] =
++                             (Ptr) (Utils_tilerGetOriAddr((UInt32)pDrvObj->inFrameList.frames[frameId]->addr[0][0],UTILS_TILER_CNT_8BIT,rotateMask,rtChannelInfo->width,rtChannelInfo->height));
++                           pDrvObj->inFrameList.frames[frameId]->addr[0][1] =
++                             (Ptr) (Utils_tilerGetOriAddr(((UInt32)pDrvObj->inFrameList.frames[frameId]->addr[0][1]),UTILS_TILER_CNT_16BIT,rotateMask,rtChannelInfo->width,rtChannelInfo->height/2));
++                       }
++                       else
++                       {
++                           pDrvObj->inFrameList.frames[frameId]->addr[0][0] =
++                             (Ptr) (Utils_tilerGetNaturalAddr((UInt32)pDrvObj->inFrameList.frames[frameId]->addr[0][0]));
++                           pDrvObj->inFrameList.frames[frameId]->addr[0][1] =
++                             (Ptr) (Utils_tilerGetNaturalAddr((UInt32)pDrvObj->inFrameList.frames[frameId]->addr[0][1]));
++                       }
++                   }
+                }
+             }
+ 
+@@ -1667,6 +1698,20 @@ Int32 SwMsLink_drvSwitchLayout(SwMsLink_Obj * pObj,
+ 
+             pObj->chObj[chNum].displayStarted = FALSE;
+ 
++            if ((pChInfo->memType == VPS_VPDMA_MT_TILEDMEM) &&
++                (UTILS_TILER_ORI_XY_SWAP & pObj->chObj[chNum].rotateMask))
++            {
++                UInt32 tempWidth = pWinObj->scRtInFrmPrm.width;
++                UInt32 tempCropWidth = pWinObj->scRtCropCfg.cropWidth;
++
++                pWinObj->scRtInFrmPrm.width =   pWinObj->scRtInFrmPrm.height;
++                pWinObj->scRtInFrmPrm.height =  tempWidth;
++                pWinObj->scRtCropCfg.cropWidth = pWinObj->scRtCropCfg.cropHeight;
++                pWinObj->scRtCropCfg.cropHeight = tempCropWidth;
++                pWinObj->scRtInFrmPrm.pitch[0] = UTILS_TILER_CNT_8BIT_PITCH_XY_SWAP;
++                pWinObj->scRtInFrmPrm.pitch[1] = UTILS_TILER_CNT_16BIT_PITCH_XY_SWAP;
++            }
++
+         }
+ 
+         if(pWinObj->scRtInFrmPrm.width > SW_MS_MAX_WIDTH_SUPPORTED)
+@@ -1699,12 +1744,12 @@ Int32 SwMsLink_drvSwitchLayout(SwMsLink_Obj * pObj,
+                             * make S/W mosaic. This is sometimes needed due to SC
+                            * performance. */
+                 if ((FVID2_SF_PROGRESSIVE ==
+-                     pObj->inQueInfo.chInfo[chNum].scanFormat)
++                     pObj->rtChannelInfo[chNum].scanFormat)
+                             &&
+                     pObj->layoutParams.winInfo[winId].bypass
+                             &&
+                     VPS_VPDMA_MT_NONTILEDMEM ==
+-                            pObj->inQueInfo.chInfo[chNum].memType
++                            pObj->rtChannelInfo[chNum].memType
+                     )
+                 {
+                     pWinObj->scRtCropCfg.cropStartY /= 2;
+@@ -1730,10 +1775,10 @@ Int32 SwMsLink_drvSwitchLayout(SwMsLink_Obj * pObj,
+                       * make S/W mosaic. This is sometimes needed due to SC
+                       * performance. */
+             if ((FVID2_SF_PROGRESSIVE ==
+-                 pObj->inQueInfo.chInfo[chNum].scanFormat) &&
++                 pObj->rtChannelInfo[chNum].scanFormat) &&
+                 pObj->layoutParams.winInfo[winId].bypass   &&
+                 VPS_VPDMA_MT_NONTILEDMEM ==
+-                            pObj->inQueInfo.chInfo[chNum].memType)
++                            pObj->rtChannelInfo[chNum].memType)
+             {
+                 pWinObj->scRtCropCfg.cropStartY /= 2;
+                 pWinObj->scRtCropCfg.cropHeight /= 2;
+@@ -1903,6 +1948,7 @@ Int32 SwMsLink_drvCreateChannelObj(SwMsLink_Obj * pObj)
+         pObj->chObj[i].displayStarted = FALSE;
+         pObj->chObj[i].doFrameSkip = FALSE;
+         pObj->chObj[i].hmpCrop.enableHMPCropFlag = FALSE;
++        pObj->chObj[i].rotateMask = UTILS_TILER_ORI_NONE;
+ 
+     }
+     pObj->lastOutBufPtr = NULL;
+@@ -3800,7 +3846,9 @@ Int32 SwMsLink_drvMakeFrameLists(SwMsLink_Obj * pObj, FVID2_Frame * pOutFrame)
+                     {
+                         rtChannelInfo->scanFormat =
+                             pFrameInfo->rtChInfo.scanFormat;
+-                        rtParamUpdatePerFrame = TRUE;
++						pObj->inQueInfo.chInfo[pInFrame->channelNum].scanFormat =
++							pFrameInfo->rtChInfo.scanFormat;
++						rtParamUpdatePerFrame = TRUE;
+                         Vps_printf(" SWMS: ch:%d ScanFormat changed to %s....***\n",
+                             pInFrame->channelNum, 
+                             gSystem_nameScanFormat[pFrameInfo->rtChInfo.scanFormat]);
+@@ -3818,6 +3866,8 @@ Int32 SwMsLink_drvMakeFrameLists(SwMsLink_Obj * pObj, FVID2_Frame * pOutFrame)
+                     {
+                         rtChannelInfo->memType =
+                             pFrameInfo->rtChInfo.memType;
++                        pObj->inQueInfo.chInfo[pInFrame->channelNum].memType =
++                            pFrameInfo->rtChInfo.memType;
+                         rtParamUpdatePerFrame = TRUE;
+                     }
+                     pFrameInfo->isDataTypeChange = FALSE;
+@@ -5012,3 +5062,41 @@ Int32 SwMsLink_drvSetWinPrm(SwMsLink_Obj *pObj, SwMsLink_AdjustWinPrm *winParams
+ 
+     return FVID2_SOK;
+ }
++
++Int32 SwMsLink_drvSetRotateParams(SwMsLink_Obj *pObj, SwMsLink_ChRotateParams *chRotateParams)
++{
++    UTILS_assert(chRotateParams != NULL);
++
++    SwMsLink_drvLock(pObj);
++
++    if (chRotateParams->chId < pObj->inQueInfo.numCh)
++    {
++        UInt32 prevMask = pObj->chObj[chRotateParams->chId].rotateMask;
++
++        pObj->chObj[chRotateParams->chId].rotateMask = UTILS_TILER_ORI_NONE;
++
++        if (chRotateParams->flipX)
++        {
++            pObj->chObj[chRotateParams->chId].rotateMask |= UTILS_TILER_ORI_X_FLIP;
++        }
++        if (chRotateParams->flipY)
++        {
++            pObj->chObj[chRotateParams->chId].rotateMask |= UTILS_TILER_ORI_Y_FLIP;
++        }
++        if (chRotateParams->swapXY)
++        {
++            pObj->chObj[chRotateParams->chId].rotateMask |= UTILS_TILER_ORI_XY_SWAP;
++        }
++        if ((prevMask & UTILS_TILER_ORI_XY_SWAP) ^ (pObj->chObj[chRotateParams->chId].rotateMask & UTILS_TILER_ORI_XY_SWAP))
++        {
++            Vps_printf(" %d: SWMS: Ch [%d] Changes in X-Y orientation from %d to %d\n",
++                       Utils_getCurTimeInMsec(),
++                       chRotateParams->chId,
++                       (prevMask & UTILS_TILER_ORI_XY_SWAP),
++                       (pObj->chObj[chRotateParams->chId].rotateMask & UTILS_TILER_ORI_XY_SWAP));
++            pObj->scChMapRtParamUpdate = TRUE;
++        }
++    }
++    SwMsLink_drvUnlock(pObj);
++    return FVID2_SOK;
++}
+diff --git a/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_priv.h b/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_priv.h
+index 6ad384d..ebf2aff 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_priv.h
++++ b/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_priv.h
+@@ -179,6 +179,7 @@ typedef struct SwMsLink_chObj
+     Bool   displayStarted; 
+     UInt64 firstPTS;
+     UInt64 currPTS; 
++    UInt32 rotateMask;
+ } SwMsLink_chObj;
+ 
+ 
+@@ -438,6 +439,8 @@ Int32 SwMsLink_drvGetInputChTimeInfo(SwMsLink_Obj *pObj, SwMsLink_ChTimeParams *
+ 
+ Int32 SwMsLink_drvSetWinPrm(SwMsLink_Obj *pObj, SwMsLink_AdjustWinPrm *winParams);
+ 
++Int32 SwMsLink_drvSetRotateParams(SwMsLink_Obj *pObj, SwMsLink_ChRotateParams *chRotateParams);
++
+ #endif
+ 
+ 
+diff --git a/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_tsk.c b/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_tsk.c
+index a84bbc5..aebc479 100755
+--- a/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_tsk.c
++++ b/dvr_rdk/mcfw/src_bios6/links_m3vpss/swMs/swMsLink_tsk.c
+@@ -162,6 +162,12 @@ Int32 SwMsLink_tskRun(SwMsLink_Obj * pObj, Utils_TskHndl * pTsk,
+                  Utils_tskAckOrFreeMsg(pRunMsg, status);
+                  break;
+ 
++			case SYSTEM_SW_MS_LINK_CMD_IMAGE_ROTATE_CMD:
++				 pPrm = Utils_msgGetPrm(pRunMsg);
++				 status = SwMsLink_drvSetRotateParams(pObj, pPrm);
++				 Utils_tskAckOrFreeMsg(pRunMsg, status);
++				 break;
++
+             default:
+                 Utils_tskAckOrFreeMsg(pRunMsg, status);
+                 break;
+diff --git a/dvr_rdk/mcfw/src_bios6/utils/src/utils_tiler.c b/dvr_rdk/mcfw/src_bios6/utils/src/utils_tiler.c
+index 241fe5d..4b7a5f9 100755
+--- a/dvr_rdk/mcfw/src_bios6/utils/src/utils_tiler.c
++++ b/dvr_rdk/mcfw/src_bios6/utils/src/utils_tiler.c
+@@ -9,6 +9,37 @@
+ #include <mcfw/interfaces/link_api/system_tiler.h>
+ #include <mcfw/interfaces/link_api/system_debug.h>
+ 
++
++#define UTILS_TILER_VIRTADDR_NUMBITS              (27)
++#define UTILS_TILER_VIRTADDR_X_COORDINATE_NUMBITS (14)
++#define UTILS_TILER_VIRTADDR_Y_COORDINATE_NUMBITS (UTILS_TILER_VIRTADDR_NUMBITS - UTILS_TILER_VIRTADDR_X_COORDINATE_NUMBITS)
++#define UTILS_TILER_MASK_XY_FLIP                  (UTILS_TILER_ORI_XY_SWAP << UTILS_TILER_ORI_MODE_SHIFT)
++#define UTILS_TILER_MASK_Y_INVERT                 (UTILS_TILER_ORI_Y_FLIP  << UTILS_TILER_ORI_MODE_SHIFT)
++#define UTILS_TILER_MASK_X_INVERT                 (UTILS_TILER_ORI_X_FLIP << UTILS_TILER_ORI_MODE_SHIFT)
++#define UTILS_TILER_MASK(bits)                    ((1u << (bits)) - 1u)
++#define UTILS_TILER_VIEW_SIZE                     (1u << (UTILS_TILER_VIRTADDR_NUMBITS))
++#define UTILS_TILER_VIEW_MASK                     (UTILS_TILER_VIEW_SIZE - 1u)
++/* create tsptr by adding view orientation and access mode */
++#define UTILS_TILER_ADDR(x, orient, a)            ((UInt32) (x) | (orient) | ((a) << UTILS_TILER_VIRTADDR_NUMBITS))
++
++
++typedef struct UtilsTilerGeometry_s
++{
++    UInt32 x_shift;
++    UInt32 y_shift;
++} UtilsTilerGeometry_s;
++
++UtilsTilerGeometry_s UtilsTilerGeometry[UTILS_TILER_CNT_MAX] =
++{
++  [UTILS_TILER_CNT_8BIT]  = {.x_shift =  0,
++                             .y_shift = 0},
++  [UTILS_TILER_CNT_16BIT] = {.x_shift =  0,
++                             .y_shift = 1},
++  [UTILS_TILER_CNT_32BIT] = {.x_shift =  1,
++                             .y_shift = 1}
++};
++
++
+ UInt32 Utils_tilerAddr2CpuAddr(UInt32 tilerAddr)
+ {
+     UInt32 cpuAddr, cntMode;
+@@ -73,6 +104,66 @@ Int32 Utils_tilerGetMaxPitch(UInt32 cntMode, UInt32 * maxPitch)
+     return 0;
+ }
+ 
++/* calculate the tiler space address of a pixel in a view orientation */
++static
++UInt32 Utils_tilerGetAddress(UInt32 oriFlag, UInt32  cntMode, UInt32 x, UInt32 y)
++{
++    UInt32 x_bits, y_bits, tmp, x_mask, y_mask, alignment;
++
++    x_bits = UTILS_TILER_VIRTADDR_X_COORDINATE_NUMBITS - UtilsTilerGeometry[cntMode].x_shift;
++    y_bits = UTILS_TILER_VIRTADDR_Y_COORDINATE_NUMBITS - UtilsTilerGeometry[cntMode].y_shift;
++    alignment = UtilsTilerGeometry[cntMode].x_shift + UtilsTilerGeometry[cntMode].y_shift;
++
++    /* validate coordinate */
++    x_mask = UTILS_TILER_MASK(x_bits);
++    y_mask = UTILS_TILER_MASK(y_bits);
++
++    /* account for mirroring */
++    if (oriFlag & UTILS_TILER_MASK_X_INVERT)
++        x ^= x_mask;
++    if (oriFlag & UTILS_TILER_MASK_Y_INVERT)
++        y ^= y_mask;
++
++    /* get coordinate address */
++    if (oriFlag & UTILS_TILER_MASK_XY_FLIP)
++        tmp = ((x << y_bits) + y);
++    else
++        tmp = ((y << x_bits) + x);
++
++    return UTILS_TILER_ADDR((tmp << alignment), oriFlag, cntMode);
++}
++
++static
++Void   Utils_tilerGetNaturalXY(UInt32 tilerAddr,
++                               UInt32 *x,
++                               UInt32 *y)
++{
++    UInt32 x_bits, y_bits, offset;
++    UInt32 cntMode;
++
++    cntMode = UTILS_TILER_GET_CNT_MODE(tilerAddr);
++
++    x_bits = UTILS_TILER_VIRTADDR_X_COORDINATE_NUMBITS - UtilsTilerGeometry[cntMode].x_shift;
++    y_bits = UTILS_TILER_VIRTADDR_Y_COORDINATE_NUMBITS - UtilsTilerGeometry[cntMode].y_shift;
++    offset = (tilerAddr & UTILS_TILER_VIEW_MASK) >>
++             (UtilsTilerGeometry[cntMode].x_shift + UtilsTilerGeometry[cntMode].y_shift);
++
++    /* separate coordinate bitfields based on view orientation */
++    if (tilerAddr & UTILS_TILER_MASK_XY_FLIP) {
++        *x = offset >> y_bits;
++        *y = offset & UTILS_TILER_MASK(y_bits);
++    } else {
++        *x = offset & UTILS_TILER_MASK(x_bits);
++        *y = offset >> x_bits;
++    }
++
++    /* account for mirroring */
++    if (tilerAddr & UTILS_TILER_MASK_X_INVERT)
++        *x ^= UTILS_TILER_MASK(x_bits);
++    if (tilerAddr & UTILS_TILER_MASK_Y_INVERT)
++        *y ^= UTILS_TILER_MASK(y_bits);
++}
++
+ UInt32 Utils_tilerGetOriAddr(UInt32 tilerAddr,
+                              UInt32 cntMode,
+                              UInt32 oriFlag, UInt32 width, UInt32 height)
+@@ -123,16 +214,32 @@ UInt32 Utils_tilerGetOriAddr(UInt32 tilerAddr,
+         oriAddr += hOffset;
+     }
+ 
++    /* Set the container mode */
++    oriAddr = UTILS_TILER_PUT_CNT_MODE(oriAddr, cntMode);
+     /* Set the orientation modes */
+     oriAddr &= ~UTILS_TILER_ORI_MODE_MASK;
+-    oriAddr |= (oriFlag << UTILS_TILER_ORI_MODE_SHIFT);
++    if (oriFlag & UTILS_TILER_ORI_XY_SWAP)
++    {
++        UInt32 x,y;
+ 
+-    /* Set the container mode */
+-    oriAddr = UTILS_TILER_PUT_CNT_MODE(oriAddr, cntMode);
++        Utils_tilerGetNaturalXY(oriAddr,&x,&y);
++        oriAddr = Utils_tilerGetAddress(UTILS_TILER_MASK_XY_FLIP,cntMode,x,y);
++    }
++    oriAddr |= (oriFlag << UTILS_TILER_ORI_MODE_SHIFT);
+ 
+     return (oriAddr);
+ }
+ 
++UInt32 Utils_tilerGetNaturalAddr(UInt32 tilerAddr)
++{
++    UInt32 x,y;
++    UInt32 cntMode;
++
++    Utils_tilerGetNaturalXY(tilerAddr,&x,&y);
++    cntMode = UTILS_TILER_GET_CNT_MODE(tilerAddr);
++    return Utils_tilerGetAddress(UTILS_TILER_ORI_NONE,cntMode,x,y);
++}
++
+ extern void System_memPrintHeapStatus();
+ 
+ Int32 Utils_tilerFrameAlloc(FVID2_Format * pFormat,
+diff --git a/dvr_rdk/mcfw/src_bios6/utils/utils_tiler.h b/dvr_rdk/mcfw/src_bios6/utils/utils_tiler.h
+index 8733dca..a2364d7 100755
+--- a/dvr_rdk/mcfw/src_bios6/utils/utils_tiler.h
++++ b/dvr_rdk/mcfw/src_bios6/utils/utils_tiler.h
+@@ -40,6 +40,13 @@
+ #define UTILS_TILER_CNT_16BIT_MAX_LINES  (4096u)
+ #define UTILS_TILER_CNT_32BIT_MAX_LINES  (4096u)
+ 
++#define UTILS_TILER_CNT_8BIT_PITCH   (VPSUTILS_TILER_CNT_8BIT_PITCH)
++#define UTILS_TILER_CNT_16BIT_PITCH  (VPSUTILS_TILER_CNT_16BIT_PITCH)
++
++#define UTILS_TILER_CNT_8BIT_PITCH_XY_SWAP  (8 * 1024)
++#define UTILS_TILER_CNT_16BIT_PITCH_XY_SWAP (8 * 1024)
++
++
+ #define UTILS_TILER_ORI_MODE_SHIFT   (29u)
+ #define UTILS_TILER_ORI_MODE_MASK    (0x07u << UTILS_TILER_ORI_MODE_SHIFT)
+ 
+@@ -136,6 +143,15 @@ Int32 Utils_tilerFrameFree(FVID2_Format * pFormat,
+ */
+ UInt32 Utils_tilerCpuAddr2TilerAddr(UInt32 cpuAddr);
+ 
++/**
++ *  \brief Get 0 degree natural tiler address for the given tiler addr
++ *
++ *  \param tilerAddr      [IN] Tiler address of any orientation
++ *
++ *  \return Natural View Tiler address for the given tiler Addr
++*/
++UInt32 Utils_tilerGetNaturalAddr(UInt32 tilerAddr);
++
+ #endif
+ 
+ /* @} */
+diff --git a/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis.c b/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis.c
+index 2ff8023..9c1767f 100755
+--- a/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis.c
++++ b/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis.c
+@@ -4409,3 +4409,30 @@ Int32 Vdis_setCprocConfig(int config)
+     return status;
+ }
+ 
++Int32 Vdis_setRotateConfig(VDIS_DEV vdDevId, UInt32 chId,UInt32 flipX,UInt32 flipY,UInt32 swapXY)
++{
++    Int status = ERROR_NONE;
++    SwMsLink_ChRotateParams chRotatePrms;
++
++    if ((Vdis_getDisplayContextIndex(vdDevId) < OSA_ARRAYSIZE(gVdisModuleContext.displayId)
++        &&
++        (SYSTEM_LINK_ID_INVALID != Vdis_getSwMsId(vdDevId))))
++    {
++        memset(&chRotatePrms,0,sizeof(chRotatePrms));
++        chRotatePrms.chId =  chId;
++        chRotatePrms.flipX = flipX;
++        chRotatePrms.flipY = flipY;
++        chRotatePrms.swapXY = swapXY;
++        status =
++        System_linkControl(Vdis_getSwMsId(vdDevId),
++                           SYSTEM_SW_MS_LINK_CMD_IMAGE_ROTATE_CMD,
++                           &chRotatePrms,
++                           sizeof(chRotatePrms), TRUE);
++    }
++    else
++    {
++        status = ERROR_FAIL;
++    }
++
++    return status;
++}
+-- 
+2.7.4
+
