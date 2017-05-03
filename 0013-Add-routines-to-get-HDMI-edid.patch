@@ -1,0 +1,162 @@
+From a7216cb8429e8d03b36d13ed835138a8b4f7555d Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Fri, 10 Jun 2016 18:00:54 +0800
+Subject: [PATCH 13/42] Add routines to get HDMI edid.
+
+---
+ dvr_rdk/mcfw/interfaces/ti_vdis.h                  | 17 +++++++++++
+ dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis.c          | 26 +++++++++++++++++
+ .../src_linux/mcfw_api/ti_vdis_hdmi_ctrl_priv.c    | 34 ++++++++++++++++++++++
+ .../src_linux/mcfw_api/ti_vdis_hdmi_ctrl_priv.h    | 14 +++++++++
+ 4 files changed, 91 insertions(+)
+
+diff --git a/dvr_rdk/mcfw/interfaces/ti_vdis.h b/dvr_rdk/mcfw/interfaces/ti_vdis.h
+index 28b6a06..c0f130f 100755
+--- a/dvr_rdk/mcfw/interfaces/ti_vdis.h
++++ b/dvr_rdk/mcfw/interfaces/ti_vdis.h
+@@ -427,6 +427,23 @@ Int32 Vdis_start();
+ */
+ Int32 Vdis_stop();
+ 
++/*
++ *  Added by   : zzx.
++ *
++ *  Date       : Nov 11, 2013.
++ *
++ *  Description:
++ *
++ *  Add routine to get HDMI edid data.
++ *
++ */
++/**
++    \brief  Get HDMI edid data.
++
++    \return ERROR_NONE on success
++*/
++Int32 Vdis_GetHdmiEDID(unsigned char *pedid);
++
+ /**
+     \brief Set or change mosaic information on a given display
+ 
+diff --git a/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis.c b/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis.c
+index 79a5d5b..30ebc67 100755
+--- a/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis.c
++++ b/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis.c
+@@ -683,6 +683,32 @@ Int32 Vdis_stop()
+     return 0;
+ }
+ 
++/*
++ *  Added by   : zzx.
++ *
++ *  Date       : Nov 11, 2013.
++ *
++ *  Description:
++ *
++ *  Add routine to get HDMI edid data.
++ *
++ */
++/**
++ * \brief:
++ *      Get HDMI edid data.
++ * \input:
++ *      NA
++ * \output:
++ *      NA
++ * \return
++*       ERROR_NOERROR       --  while success
++*       ERROR_CODE          --  refer for err defination
++*/
++Int32 Vdis_GetHdmiEDID(unsigned char *pedid)
++{
++    return Vdis_hdmiCtrl_getHdmiEDID(pedid);
++}
++
+ /* Generic description */
+ /* There will be 3 levels as:
+    1. Device -- device ports setting, different chip have different mapping.
+diff --git a/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis_hdmi_ctrl_priv.c b/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis_hdmi_ctrl_priv.c
+index 58c5136..25000ed 100755
+--- a/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis_hdmi_ctrl_priv.c
++++ b/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis_hdmi_ctrl_priv.c
+@@ -42,6 +42,7 @@
+ 
+ #define STOP_HDMI_TRANSMITTER           (1)
+ #define START_HDMI_TRANSMITTER          (2)
++#define GET_HDMI_EDID                   (3)
+ 
+ #define READ_PARSED_EDID                (8)
+ #define APPLY_PARSED_EDID               (16)
+@@ -275,6 +276,29 @@ Int32 Vdis_hdmiCtrl_start(UInt32 currResolution)
+     return status;
+ }
+ 
++/*
++ *  Added by   : zzx.
++ *
++ *  Date       : Nov 11, 2013.
++ *
++ *  Description:
++ *
++ *  Add routine to get HDMI edid data.
++ *
++ */
++Int32 Vdis_hdmiCtrl_getHdmiEDID(unsigned char *pedid)
++{
++    int status = OSA_EFAIL;
++    if (gCtrlInst.exitCtrlthread == CONTINUE_CONTROL_THREAD) {
++        status = OSA_mbxSendMsg(&gCtrlInst.ctrlMbx, &gCtrlInst.ctrlStart, GET_HDMI_EDID, (void *)pedid, OSA_MBX_WAIT_ACK);
++        if (status != OSA_SOK) {
++            printf(HDMI_CTRL_ERROR "Could not get HDMI edid data.\n");
++        }
++    }
++
++    return status;
++}
++
+ 
+ Int32 Vdis_getScreenInfo(VDIS_DEV vdDevId,
+                          VDIS_SCREEN_INFO_S *scrInfo)
+@@ -822,6 +846,16 @@ static void *Vdis_hdmiControlThread(void * ctrlInst)
+                     OSA_mbxAckOrFreeMsg(pMsg, OSA_SOK);
+                 break;
+ 
++                case GET_HDMI_EDID:
++                    /* Get hdmi edid data */
++                    status = OSA_EFAIL;
++                    if (pCtrlInst->validEdid) {
++                        memcpy(OSA_msgGetPrm(pMsg), pCtrlInst->edid, OSA_ARRAYSIZE(pCtrlInst->edid)) ;
++                        status = OSA_SOK;
++                    }
++                    OSA_mbxAckOrFreeMsg(pMsg, status);
++                    break;
++
+                 default :
+                     /* Un-Recoganised command, nack */
+                     OSA_mbxAckOrFreeMsg(pMsg, OSA_EFAIL);
+diff --git a/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis_hdmi_ctrl_priv.h b/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis_hdmi_ctrl_priv.h
+index e75134e..a3efef7 100755
+--- a/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis_hdmi_ctrl_priv.h
++++ b/dvr_rdk/mcfw/src_linux/mcfw_api/ti_vdis_hdmi_ctrl_priv.h
+@@ -42,4 +42,18 @@ int Vdis_hdmiCtrl_stop(void);
+ int Vdis_hdmiCtrl_start(UInt32 currResolution);
+ /* To be used only for DEBUG */
+ void Vdis_hdmiCtrl_printDetectedDetails(void);
++
++/*
++ *  Added by   : zzx.
++ *
++ *  Date       : Nov 11, 2013.
++ *
++ *  Description:
++ *
++ *  Add routine to get HDMI edid data.
++ *
++ */
++/* Get HDMI edid data */
++int Vdis_hdmiCtrl_getHdmiEDID(unsigned char *pedid);
++
+ #endif /* _DEMO_HDMI_CTRL_H_ */
+-- 
+2.7.4
+
