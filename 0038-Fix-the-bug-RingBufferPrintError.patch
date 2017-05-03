@@ -1,0 +1,25 @@
+From 8a93a0270c882d88f9818c3e869fc4efb8748c67 Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Fri, 22 Jul 2016 10:24:24 +0800
+Subject: [PATCH 38/42] Fix the bug: RingBufferPrintError
+
+---
+ dvr_rdk/mcfw/src_common/utils/src/ringbuf.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dvr_rdk/mcfw/src_common/utils/src/ringbuf.c b/dvr_rdk/mcfw/src_common/utils/src/ringbuf.c
+index 86793eb..6543124 100755
+--- a/dvr_rdk/mcfw/src_common/utils/src/ringbuf.c
++++ b/dvr_rdk/mcfw/src_common/utils/src/ringbuf.c
+@@ -561,7 +561,7 @@ Void* RingBufferReaderAcquire(RingBufferHandle_t *ringBufferHndl, UInt32 *reqLen
+     /* wrReleaseLen is added to check if some data is written, if not reader cannot acquire */
+     if (ringBufferHndl->wrReleaseLen == 0) 
+     {
+-        RingBufferPrintError(RING_BUF_DEBUG_INFO, RING_BUF_READER, RING_BUF_ERROR_DATA_EMPTY);
++        RingBufferPrintError(RING_BUF_DEBUG_INFO, RING_BUF_WRITER, RING_BUF_ERROR_DATA_EMPTY);
+         status |= RINGBUF_FAIL;
+     }
+ 
+-- 
+2.7.4
+
