@@ -1,0 +1,64 @@
+From bbdf2f42ac8d71d8ef466b93f8cace9ea72d4327 Mon Sep 17 00:00:00 2001
+From: zzx <xiaohou1045917067@163.com>
+Date: Mon, 20 Jun 2016 13:28:49 +0800
+Subject: [PATCH 31/42] v2.0
+
+---
+ Changelog        |  6 ++++++
+ ReleaseNotes.txt | 19 ++++++++++++++++++-
+ 2 files changed, 24 insertions(+), 1 deletion(-)
+
+diff --git a/Changelog b/Changelog
+index af169f8..b86f536 100644
+--- a/Changelog
++++ b/Changelog
+@@ -1,3 +1,9 @@
++ -- Migrate capture and display hardware configration to demos
++(2016-08-10 16:51:30 +0800) <zzx>
++ -- Add QT app and live555 module support
++(2016-08-10 16:51:28 +0800) <zzx>
++ -- v1.0
++(2016-08-10 16:51:17 +0800) <zzx>
+  -- By default,Do not config external video decoder.
+ (2016-06-28 19:48:32 +0800) <zzx>
+  -- Add a helloWorld algorithms link.
+diff --git a/ReleaseNotes.txt b/ReleaseNotes.txt
+index ce33f8c..b404ccf 100644
+--- a/ReleaseNotes.txt
++++ b/ReleaseNotes.txt
+@@ -1,6 +1,23 @@
+ ReleaseNotes
+ 
+ -------------------------------------------------------------------------------
++Version 2.0 (Jun 20, 2016 zzx)
++-------------------------------------------------------------------------------
++
++Overview
++
++
++Changelog
++
++-- Migrate capture and display hardware configration to demos
++(2016-08-10 16:51:30 +0800) <zzx>
++ -- Add QT app and live555 module support
++(2016-08-10 16:51:28 +0800) <zzx>
++ -- v1.0
++(2016-08-10 16:51:17 +0800) <zzx>
++
++
++-------------------------------------------------------------------------------
+ Version 1.0 (Jun 17, 2016 zzx)
+ -------------------------------------------------------------------------------
+ 
+@@ -9,7 +26,7 @@ Overview
+ 
+ Changelog
+ 
+--- By default,Do not config external video decoder.
++ -- By default,Do not config external video decoder.
+ (2016-06-28 19:48:32 +0800) <zzx>
+  -- Add a helloWorld algorithms link.
+ (2016-06-28 19:48:30 +0800) <zzx>
+-- 
+2.7.4
+
